@@ -48,15 +48,24 @@
       position:relative;flex:1;border-radius:16px;border:1px solid rgba(255,255,255,.10);
       background:rgba(255,255,255,.03);overflow:hidden;min-height:520px;
       box-shadow: 0 18px 42px rgba(0,0,0,.32);
+      display:flex;flex-direction:column;
     }
+
+    /* Barra inferior FUERA del canvas para que no tape el campo */
+    .bottomBar{
+      display:flex;align-items:flex-end;gap:10px;
+      padding:10px 10px 10px;
+      border-top:1px solid rgba(255,255,255,.08);
+      background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.22));
+    }
+
+    .playArea{
+      position:relative;
+      flex:1;
+      min-height:360px;
+    }
+
     canvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:#091022}
-    .note{
-      position:absolute;left:12px;bottom:10px;z-index:5;
-      padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.30);
-      border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.35;max-width:min(960px,calc(100% - 24px));
-      color:rgba(234,240,255,.8)
-    }
-    .note b{color:#fff}
 
     .goalBanner{
       position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;
@@ -103,10 +112,37 @@
     .choiceRow{display:flex;gap:10px;flex-wrap:wrap}
     .choiceRow button{flex:1;min-width:150px}
     .hint{margin-top:10px;font-size:12px;color:rgba(234,240,255,.70)}
+
+    /* Mensaje de controles: colapsable */
+    .hintCard{
+      flex:1;
+      padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.26);
+      border:1px solid rgba(255,255,255,.10);
+      color:rgba(234,240,255,.86);
+      font-size:12px;line-height:1.35;
+      max-width:900px;
+      user-select:none;
+    }
+    .hintHead{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+      font-weight:900;color:#fff;
+    }
+    .chev{opacity:.75}
+    .hintBody{margin-top:6px}
+    .hintCard.compact .hintBody{display:none}
+    .hintCard.compact{max-width:520px}
+    .hintCard .kbd{
+      display:inline-block;padding:1px 6px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      font-weight:800;font-size:11px;opacity:.95
+    }
+
     @media(max-width:720px){
       .top{flex-direction:column;align-items:stretch}
       .btnRow button{flex:1}
       .shell{min-height:62vh}
+      .hintCard{max-width:unset}
     }
   </style>
 </head>
@@ -114,8 +150,8 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <div class="title">PLAKKS-like Flick Soccer <span class="badge">quitar palito manual</span></div>
-      <div class="sub">Tras gol: eliges qué palito retirar · Los retirados quedan tumbados fuera del campo</div>
+      <div class="title">PLAKKS-like Flick Soccer <span class="badge">UI sin tapar campo</span></div>
+      <div class="sub">El mensaje de controles ya no pisa el césped: va en una barra inferior colapsable</div>
     </div>
     <div class="hud">
       <div class="score" aria-label="Marcador">
@@ -135,34 +171,48 @@
   </div>
 
   <div class="shell" id="shell">
-    <canvas id="c"></canvas>
-    <div class="goalBanner" id="goalBanner"><div class="goalText">GOOOL</div></div>
+    <div class="playArea" id="playArea">
+      <canvas id="c"></canvas>
+      <div class="goalBanner" id="goalBanner"><div class="goalText">GOOOL</div></div>
 
-    <!-- Overlay: elegir palito a retirar -->
-    <div class="overlay" id="removeOverlay">
-      <div class="panel">
-        <h3 id="removeTitle">Elige el palito a retirar</h3>
-        <p id="removeDesc">Te han metido gol. Toca uno de tus palitos para retirarlo (quedará tumbado fuera del campo).</p>
-        <div class="hint">Consejo: el palito seleccionado se resaltará. Luego elegirás la esquina de saque.</div>
-      </div>
-    </div>
-
-    <!-- Overlay: elegir esquina de saque -->
-    <div class="overlay" id="cornerOverlay">
-      <div class="panel">
-        <h3 id="cornerTitle">Elige esquina para sacar</h3>
-        <p id="cornerDesc">El equipo que recibió el gol saca ahora. Elige una de tus dos esquinas.</p>
-        <div class="choiceRow">
-          <button id="cornerTop" class="secondary">Esquina superior</button>
-          <button id="cornerBottom" class="secondary">Esquina inferior</button>
+      <!-- Overlay: elegir palito a retirar -->
+      <div class="overlay" id="removeOverlay">
+        <div class="panel">
+          <h3 id="removeTitle">Elige el palito a retirar</h3>
+          <p id="removeDesc">Te han metido gol. Toca uno de tus palitos para retirarlo (quedará tumbado fuera del campo).</p>
+          <div class="hint">Consejo: el palito seleccionado se resaltará. Luego elegirás la esquina de saque.</div>
         </div>
-        <div class="hint">Después del saque, la bola se juega desde donde se quede.</div>
+      </div>
+
+      <!-- Overlay: elegir esquina de saque -->
+      <div class="overlay" id="cornerOverlay">
+        <div class="panel">
+          <h3 id="cornerTitle">Elige esquina para sacar</h3>
+          <p id="cornerDesc">El equipo que recibió el gol saca ahora. Elige una de tus dos esquinas.</p>
+          <div class="choiceRow">
+            <button id="cornerTop" class="secondary">Esquina superior</button>
+            <button id="cornerBottom" class="secondary">Esquina inferior</button>
+          </div>
+          <div class="hint">Después del saque, la bola se juega desde donde se quede.</div>
+        </div>
       </div>
     </div>
 
-    <div class="note">
-      <b>Chute:</b> toca la bola → arrastra hacia atrás → suelta.<br/>
-      <b>Tras gol:</b> el equipo que encaja elige qué palito retirar, luego elige esquina para sacar.
+    <!-- ✅ Barra inferior (no tapa el canvas) -->
+    <div class="bottomBar" id="bottomBar">
+      <div class="hintCard" id="hintCard" role="button" tabindex="0" aria-expanded="true" title="Toca para plegar/desplegar">
+        <div class="hintHead">
+          <span>Controles</span>
+          <span class="chev" id="hintChev">▾</span>
+        </div>
+        <div class="hintBody" id="hintBody">
+          <div><b>Chute:</b> toca la bola → arrastra <b>hacia atrás</b> → suelta.</div>
+          <div><b>Tras gol:</b> el equipo que encaja elige qué palito retirar, luego elige esquina para sacar.</div>
+          <div style="margin-top:6px;opacity:.85">
+            Tip móvil: si quieres más campo visible, toca aquí para <span class="kbd">plegar</span>.
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -190,8 +240,8 @@
 
     goal: {
       opening: 220,
-      boxDepth: 92,          // visual
-      boxDepthPhysics: 110,  // físico (fondo de red)
+      boxDepth: 92,
+      boxDepthPhysics: 110,
       netCell: 18,
       innerPad: 10
     },
@@ -235,7 +285,7 @@
         alpha: 0.82,
         pad: 10,
         gap: 10,
-        lieAngleBase: Math.PI/2, // tumbados
+        lieAngleBase: Math.PI/2,
         lieAngleJitter: 0.28
       },
 
@@ -286,9 +336,7 @@
       this.team=team;
       this.id=id;
       this.active=true;
-
-      // para render tumbado fuera del campo
-      this.removedPose=null; // {x,y,angle} en coords mundo (x puede ser <0 o >W)
+      this.removedPose=null; // {x,y,angle} en mundo
     }
   }
 
@@ -327,12 +375,10 @@
       const inMouth = this.inMouth(b.p.y);
       const dPhys = CONFIG.goal.boxDepthPhysics;
 
-      // laterales con hueco
       if(!inMouth){
         if(b.p.x-b.r<0){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e; }
         if(b.p.x+b.r>W){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e; }
       }else{
-        // puede entrar en la red fuera del campo
         if(b.p.x - b.r < -dPhys){
           b.p.x = -dPhys + b.r;
           b.v.x = Math.abs(b.v.x) * en;
@@ -390,8 +436,8 @@
   }
 
   class Renderer{
-    constructor(game,canvas,shell){
-      this.game=game; this.canvas=canvas; this.shell=shell;
+    constructor(game,canvas,playArea){
+      this.game=game; this.canvas=canvas; this.playArea=playArea;
       this.ctx=canvas.getContext('2d');
 
       this.noise=document.createElement('canvas');
@@ -416,7 +462,7 @@
 
     resize(){
       const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
-      const r=this.shell.getBoundingClientRect();
+      const r=this.playArea.getBoundingClientRect();
       const cssW=Math.max(300, r.width||900);
       const cssH=Math.max(300, r.height||540);
       const w=Math.floor(cssW*dpr);
@@ -493,18 +539,15 @@
       ctx.drawImage(this.noise,x0,y0,W*s,H*s);
       ctx.globalAlpha=1;
 
-      // cajas de portería fuera
       ctx.fillStyle='rgba(0,0,0,.10)';
       ctx.fillRect(x0-gDepth, gy0, gDepth, gh);
       ctx.fillRect(x0+W*s,  gy0, gDepth, gh);
 
-      // contorno campo principal
       ctx.lineWidth=3*this.dpr;
       ctx.strokeStyle='rgba(245,255,245,.85)';
       this.roundRect(x0+2*this.dpr,y0+2*this.dpr,W*s-4*this.dpr,H*s-4*this.dpr,Math.max(2,r-6*this.dpr));
       ctx.stroke();
 
-      // borrar tramo de línea en boca (para que se lea el hueco)
       ctx.save();
       ctx.strokeStyle=this.grassFillAt(x0,y0,W*s,H*s);
       ctx.lineWidth=8*this.dpr;
@@ -512,13 +555,11 @@
       ctx.beginPath(); ctx.moveTo(x0+W*s, gy0); ctx.lineTo(x0+W*s, gy0+gh); ctx.stroke();
       ctx.restore();
 
-      // contorno de los huecos
       ctx.lineWidth=3*this.dpr;
       ctx.strokeStyle='rgba(245,255,245,.88)';
       ctx.strokeRect(x0-gDepth, gy0, gDepth, gh);
       ctx.strokeRect(x0+W*s,  gy0, gDepth, gh);
 
-      // línea central + círculo
       ctx.lineWidth=3*this.dpr;
       ctx.strokeStyle='rgba(245,255,245,.85)';
       ctx.beginPath();
@@ -587,7 +628,6 @@
         const innerH = h - 2*pad*this.scale;
         drawNet(innerX, innerY, innerW, innerH, 0.22);
 
-        // poste en la línea de gol
         ctx.lineWidth=5*this.dpr;
         ctx.strokeStyle='rgba(255,255,255,.85)';
         ctx.beginPath();
@@ -595,7 +635,6 @@
         ctx.lineTo(xLine, boxY+h);
         ctx.stroke();
 
-        // marco del hueco
         ctx.lineWidth=2.3*this.dpr;
         ctx.strokeStyle='rgba(255,255,255,.72)';
         ctx.strokeRect(boxX, boxY, d, h);
@@ -780,7 +819,7 @@
       ctx.fillStyle=`rgba(125,211,252,${0.25+0.60*t})`;
       ctx.fill();
 
-      // barra potencia
+      // barra potencia dentro del canvas (pequeña) - NO tapa porque está en el borde inferior del canvas
       const bw=190*this.dpr, bh=10*this.dpr;
       const bx=this.ox+14*this.dpr, by=this.oy+(CONFIG.world.h*this.scale)-20*this.dpr;
       ctx.shadowBlur=0;
@@ -799,7 +838,6 @@
     }
 
     drawRemovedPegs(){
-      const ctx=this.ctx;
       const remCfg=CONFIG.render.removed;
       const pv=CONFIG.render.pegVisual;
 
@@ -812,13 +850,7 @@
         const ry = r * pv.lengthMul * pv.shadowRyMul;
         this.drawShadowEllipse(sp.x,sp.y,rx,ry,0.18);
 
-        this.drawPegRodScreen(
-          sp.x, sp.y, r,
-          p.team,
-          true,
-          remCfg.alpha,
-          p.removedPose.angle
-        );
+        this.drawPegRodScreen(sp.x, sp.y, r, p.team, true, remCfg.alpha, p.removedPose.angle);
       }
     }
 
@@ -843,7 +875,6 @@
       this.drawPitch();
       this.drawGoals();
 
-      // activos
       const choosing = (this.game.phase==='chooseRemoval');
       const mustTeam = this.game.pendingRemovalTeam;
 
@@ -887,7 +918,6 @@
       const bp=this.r.w2s(b.p);
       const dx=screenPos.x-bp.x, dy=screenPos.y-bp.y;
       const dist=Math.hypot(dx,dy);
-
       const ballScreenR = b.r * this.r.scale;
       const extra = CONFIG.render.ballPickExtraCssPx * this.r.dpr;
       return dist <= (ballScreenR + extra);
@@ -897,7 +927,6 @@
       const pp=this.r.w2s(peg.p);
       const dx=screenPos.x-pp.x, dy=screenPos.y-pp.y;
       const dist=Math.hypot(dx,dy);
-
       const pegScreenR = peg.r * this.r.scale;
       const extra = CONFIG.render.pegPickExtraCssPx * this.r.dpr;
       return dist <= (pegScreenR + extra);
@@ -907,7 +936,6 @@
       this.pointerDown=true;
       this.mouse=this.pos(e);
 
-      // si estamos eligiendo palito a retirar, se selecciona con tap
       if(this.game.phase==='chooseRemoval'){
         const team=this.game.pendingRemovalTeam;
         for(const p of this.game.pegs){
@@ -983,8 +1011,8 @@
   }
 
   class Game{
-    constructor(canvas,shell){
-      this.canvas=canvas; this.shell=shell;
+    constructor(canvas,playArea){
+      this.canvas=canvas; this.playArea=playArea;
 
       this.scoreA=0; this.scoreB=0;
       this.turn = (Math.random()<0.5)?'A':'B';
@@ -996,7 +1024,7 @@
       this.buildFixedLayout();
 
       this.physics=new Physics(this);
-      this.renderer=new Renderer(this, canvas, shell);
+      this.renderer=new Renderer(this, canvas, playArea);
       this.input=new Input(this, canvas, this.renderer);
 
       this.undoSnap=null;
@@ -1015,7 +1043,6 @@
       this.bindUI();
       this.updateHUD();
 
-      // saque inicial
       this.placeBallAtCornerForTeam(this.turn, Math.random()<0.5 ? 'top' : 'bottom');
       requestAnimationFrame(()=>this.loop());
     }
@@ -1032,6 +1059,28 @@
 
       document.getElementById('cornerTop').addEventListener('click', ()=>this.chooseCorner('top'));
       document.getElementById('cornerBottom').addEventListener('click', ()=>this.chooseCorner('bottom'));
+
+      // ✅ hint colapsable (nunca tapa el campo porque está fuera del canvas)
+      const hint = document.getElementById('hintCard');
+      const toggle = () => {
+        hint.classList.toggle('compact');
+        const expanded = !hint.classList.contains('compact');
+        hint.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        document.getElementById('hintChev').textContent = expanded ? '▾' : '▸';
+      };
+      hint.addEventListener('click', toggle);
+      hint.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' ') { e.preventDefault(); toggle(); }});
+
+      // Auto-compact si la altura útil es pequeña
+      const autoCompact = () => {
+        const small = window.innerHeight < 680;
+        hint.classList.toggle('compact', small);
+        const expanded = !hint.classList.contains('compact');
+        hint.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        document.getElementById('hintChev').textContent = expanded ? '▾' : '▸';
+      };
+      window.addEventListener('resize', autoCompact);
+      autoCompact();
     }
 
     setOverlay(id, show){
@@ -1182,7 +1231,6 @@
       return null;
     }
 
-    // asigna una posición fuera del campo, tumbado, para el siguiente retirado de un equipo
     nextRemovedPose(team){
       const W=CONFIG.world.w, H=CONFIG.world.h;
       const rem = CONFIG.render.removed;
@@ -1193,12 +1241,10 @@
       const y = clamp(baseY + count*stepY, 60, H-60);
 
       const x = (team==='A') ? (-CONFIG.goal.boxDepth - 40) : (W + CONFIG.goal.boxDepth + 40);
-
       const angle = rem.lieAngleBase + rand(-rem.lieAngleJitter, rem.lieAngleJitter);
       return {x, y, angle};
     }
 
-    // llamada desde Input cuando el usuario toca un palito suyo para retirarlo
     choosePegToRemove(pegId){
       if(this.phase!=='chooseRemoval') return;
       const team=this.pendingRemovalTeam;
@@ -1208,7 +1254,6 @@
       peg.active=false;
       peg.removedPose=this.nextRemovedPose(team);
 
-      // ahora pasamos a elegir esquina
       this.pendingCornerTeam = team;
       this.pendingRemovalTeam = null;
       this.phase='waitingCorner';
@@ -1223,18 +1268,15 @@
     }
 
     applyGoal(g){
-      // suma punto al que marca (goles = palitos retirados al rival)
       if(g.scorer==='A') this.scoreA++; else this.scoreB++;
 
       this.goalBannerUntil=nowMs()+CONFIG.effects.goalBannerMs;
       document.getElementById('goalBanner').classList.add('show');
 
-      // deja la bola controlada
       this.ball.v.x=0; this.ball.v.y=0;
       this.ball.p.x = CONFIG.world.w/2;
       this.ball.p.y = CONFIG.world.h/2;
 
-      // fin de partida?
       if(this.scoreA>=11 || this.scoreB>=11){
         this.phase='gameover';
         this.winner=(this.scoreA>=11)?'A':'B';
@@ -1246,7 +1288,6 @@
         return;
       }
 
-      // el equipo que encaja elige qué palito retirar
       this.turn = g.conceded;
       this.pendingRemovalTeam = g.conceded;
       this.pendingCornerTeam = null;
@@ -1342,6 +1383,17 @@
         }
       }
 
+      // hover highlight en elección de retiro
+      if(this.phase==='chooseRemoval'){
+        const team=this.pendingRemovalTeam;
+        let hover=null;
+        // hoverPegId se actualiza por Input.onMove, aquí dejamos fallback si no hay move (touch)
+        if(!this.hoverPegId){
+          // no hacemos nada
+        }else hover=this.hoverPegId;
+        this.hoverPegId=hover;
+      }
+
       this.renderer.draw();
       if(this.phase==='gameover') this.drawGameOverOverlay();
 
@@ -1350,8 +1402,8 @@
   }
 
   const canvas=document.getElementById('c');
-  const shell=document.getElementById('shell');
-  new Game(canvas,shell);
+  const playArea=document.getElementById('playArea');
+  new Game(canvas,playArea);
 
   document.getElementById('help').addEventListener('click', ()=>document.getElementById('helpBack').classList.add('show'));
   document.getElementById('closeHelp').addEventListener('click', ()=>document.getElementById('helpBack').classList.remove('show'));
@@ -1368,17 +1420,14 @@
 ============================================================
 CÓMO JUGAR
 ============================================================
-- Metes gol si la bola cruza COMPLETAMENTE la línea de gol (x=0 o x=W) dentro de la boca de la portería.
-- Tras gol:
-  1) El equipo que encaja toca uno de sus palitos para retirarlo.
-  2) Ese palito queda tumbado fuera del campo y visible.
-  3) Luego elige esquina de saque.
+- El mensaje de controles está en una barra inferior fuera del canvas (no tapa el campo).
+- Puedes plegarlo tocándolo, y en pantallas bajas se pliega automáticamente.
 
 ============================================================
 PARÁMETROS PARA AJUSTAR
 ============================================================
-- CONFIG.render.pegPickExtraCssPx: facilidad de tocar palitos al elegir cuál retirar.
-- CONFIG.render.removed.*: apariencia/colocación de los palitos tumbados.
+- Auto-compact: window.innerHeight < 680 (en bindUI → autoCompact()).
+- Si quieres aún más campo en móvil: reduce padding de .bottomBar o el contenido de #hintBody.
 -->
 </body>
 </html>
