@@ -85,7 +85,6 @@
     .modal ul{margin:8px 0 0 18px}
     .modal .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;padding:0;border:0;background:none;box-shadow:none}
 
-    /* Overlay para elegir esquina */
     .overlay{
       position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:20;
       background:rgba(0,0,0,.45);
@@ -116,7 +115,7 @@
   <div class="top">
     <div>
       <div class="title">PLAKKS-like Flick Soccer <span class="badge">pegs fijos</span></div>
-      <div class="sub">Chutas la bola · Palitos fijos como obstáculos · Gol = quitas 1 palito al rival (al borde)</div>
+      <div class="sub">Chutas la bola · Palitos fijos como obstáculos · Tras gol: el que encaja elige esquina</div>
     </div>
     <div class="hud">
       <div class="score" aria-label="Marcador">
@@ -139,7 +138,6 @@
     <canvas id="c"></canvas>
     <div class="goalBanner" id="goalBanner"><div class="goalText">GOOOL</div></div>
 
-    <!-- Overlay: elegir esquina tras gol -->
     <div class="overlay" id="cornerOverlay">
       <div class="panel">
         <h3 id="cornerTitle">Elige esquina para sacar</h3>
@@ -154,7 +152,7 @@
 
     <div class="note">
       <b>Cómo chutar:</b> click/toca la <b>bola</b> → arrastra para dirección y potencia → suelta.<br/>
-      <span style="opacity:.9">Saque inicial desde esquina del equipo inicial. Tras gol: el equipo que encaja elige esquina para sacar.</span>
+      <span style="opacity:.9">Potencia ahora más progresiva (suave al inicio). Tras gol: el que encaja elige esquina.</span>
     </div>
   </div>
 </div>
@@ -167,32 +165,34 @@
     </div>
     <ul>
       <li><b>Turnos:</b> alternan A/B. En tu turno haces <b>un</b> chute con la <b>bola</b>.</li>
-      <li><b>Palitos:</b> son <b>fijos</b> (no se mueven). Solo se quitan cuando hay gol.</li>
-      <li><b>Saque inicial:</b> bola en una esquina del equipo inicial.</li>
-      <li><b>Tras gol:</b> saca el equipo que recibió el gol y <b>elige</b> esquina superior/inferior.</li>
-      <li><b>Juego continuo:</b> si no hay gol, la bola se juega desde donde quede.</li>
-      <li><b>Gol:</b> la bola entra completamente en la portería rival.</li>
-      <li><b>Al gol:</b> se quita 1 palito del equipo que encaja y se apoya en el borde (visible).</li>
-      <li><b>Gana:</b> quien llegue a 11 goles.</li>
+      <li><b>Palitos:</b> fijos. Solo se quitan cuando hay gol.</li>
+      <li><b>Saque inicial:</b> esquina del equipo inicial (aleatoria).</li>
+      <li><b>Tras gol:</b> saca el equipo que encaja y elige esquina.</li>
+      <li><b>Si no hay gol:</b> la bola se juega desde donde quedó.</li>
     </ul>
   </div>
 </div>
 
 <script>
 (() => {
-  /* =========================
-     CONFIG
-  ========================= */
   const CONFIG = {
     world: { w: 1200, h: 720 },
     goal: { opening: 220, depth: 46, postRadius: 10 },
 
-    ball: { r: 16, mass: 1.0, restitution: 0.90, damp: 0.994, maxSpeed: 2600 },
+    ball: { r: 16, mass: 1.0, restitution: 0.90, damp: 0.994, maxSpeed: 1800 },
+
     peg:  { r: 24, restitution: 0.55 }, // pegs fijos
 
     teams: { count: 11 },
 
-    shot: { maxDrag: 210, minImpulse: 280, maxImpulse: 2200, aimLineW: 3 },
+    // ✅ NUEVOS niveles: más suaves + curva progresiva
+    shot: {
+      maxDrag: 240,          // puedes arrastrar un poco más
+      minSpeed: 140,         // velocidad mínima (px/s en mundo)
+      maxSpeed: 980,         // velocidad máxima (px/s en mundo)
+      responseCurve: 1.8,    // >1 => suave al principio, fuerte al final
+      aimLineW: 3
+    },
 
     physics: {
       dt: 1/120,
@@ -216,14 +216,9 @@
     },
 
     effects: { goalBannerMs: 850, goalPauseMs: 520 },
-
-    // Tras gol NO recolocamos automáticamente: el equipo que encaja elige esquina.
     cornerMargin: 52,
   };
 
-  /* =========================
-     Utils
-  ========================= */
   const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
   const lerp = (a,b,t)=>a+(b-a)*t;
   const hypot = (x,y)=>Math.hypot(x,y);
@@ -323,8 +318,8 @@
           const tmag=tangent.mag();
           if(tmag>1e-6){
             tangent.mul(1/tmag);
-            ball.v.x -= tangent.x*4.0;
-            ball.v.y -= tangent.y*4.0;
+            ball.v.x -= tangent.x*3.0;
+            ball.v.y -= tangent.y*3.0;
           }
         }
       }
@@ -791,13 +786,23 @@
 
       const maxD=CONFIG.shot.maxDrag*this.r.dpr;
       const clamped=Math.min(dist,maxD);
-      const t=clamp(clamped/maxD,0,1);
+      const tRaw=clamp(clamped/maxD,0,1);
+
+      // ✅ curva progresiva
+      const t = Math.pow(tRaw, CONFIG.shot.responseCurve);
 
       if(clamped>3*this.r.dpr){
         const inv=1/(dist||1);
         const dir={ x:dx*inv, y:dy*inv };
-        const impulse=lerp(CONFIG.shot.minImpulse, CONFIG.shot.maxImpulse, t);
-        this.game.shootBall(dir,impulse);
+
+        // ✅ en vez de "impulso", fijamos una velocidad objetivo (más intuitivo)
+        const targetSpeed = lerp(CONFIG.shot.minSpeed, CONFIG.shot.maxSpeed, t);
+
+        // asignamos la velocidad directamente (y se frena por damping)
+        ball.v.x = dir.x * targetSpeed;
+        ball.v.y = dir.y * targetSpeed;
+
+        this.game.onShot();
       }
 
       this.aiming=false;
@@ -840,12 +845,10 @@
       this.input=new Input(this, canvas, this.renderer);
 
       this.undoSnap=null;
-
       this.goalBannerUntil=0;
       this.pauseUntil=0;
       this.simStartMs=0;
-
-      this.pendingCornerTeam=null; // equipo que debe elegir esquina
+      this.pendingCornerTeam=null;
 
       this.acc=0;
       this.last=nowMs();
@@ -853,7 +856,7 @@
       this.bindUI();
       this.updateHUD();
 
-      // Saque inicial: el equipo inicial elige esquina automáticamente aleatoria (solo inicio)
+      // saque inicial aleatorio (como antes)
       this.placeBallAtCornerForTeam(this.turn, Math.random()<0.5 ? 'top' : 'bottom');
 
       requestAnimationFrame(()=>this.loop());
@@ -918,8 +921,6 @@
       this.ui.scoreB.textContent=String(this.scoreB);
       this.ui.turnText.textContent=(this.turn==='A')?'Equipo A':'Equipo B';
       this.ui.turnPill.style.background=(this.turn==='A')?'#4da3ff':'#ff6b6b';
-
-      // Deshabilitar undo si no toca
       this.ui.btnUndo.disabled = !this.undoSnap || this.phase!=='ready';
     }
 
@@ -982,7 +983,6 @@
       this.pendingCornerTeam=null;
       this.input.resetSelection();
 
-      // saque inicial aleatorio
       this.placeBallAtCornerForTeam(this.turn, Math.random()<0.5 ? 'top' : 'bottom');
 
       this.setCornerOverlay(false);
@@ -990,10 +990,10 @@
     }
 
     setCornerOverlay(show){
-      this.ui.cornerOverlay.classList.toggle('show', !!show);
+      document.getElementById('cornerOverlay').classList.toggle('show', !!show);
     }
 
-    placeBallAtCornerForTeam(team, which){ // which: 'top'|'bottom'
+    placeBallAtCornerForTeam(team, which){
       const W=CONFIG.world.w, H=CONFIG.world.h;
       const m=CONFIG.cornerMargin;
       this.ball.p.y = (which==='top') ? m : (H-m);
@@ -1001,13 +1001,9 @@
       this.ball.v.x=0; this.ball.v.y=0;
     }
 
-    shootBall(dir, impulse){
-      if(!this.canShootNow()) return;
+    onShot(){
+      // snapshot para undo justo antes del tiro
       this.undoSnap=this.snapshot();
-
-      this.ball.v.x += dir.x*(impulse/this.ball.mass);
-      this.ball.v.y += dir.y*(impulse/this.ball.mass);
-
       this.phase='sim';
       this.simStartMs=nowMs();
       this.updateHUD();
@@ -1046,14 +1042,11 @@
       if(g.scorer==='A') this.scoreA++; else this.scoreB++;
       this.removeOnePeg(g.conceded);
 
-      // banner
       this.goalBannerUntil=nowMs()+CONFIG.effects.goalBannerMs;
-      this.ui.goalBanner.classList.add('show');
+      document.getElementById('goalBanner').classList.add('show');
 
-      // parar bola
       this.ball.v.x=0; this.ball.v.y=0;
 
-      // victoria
       if(this.scoreA>=11 || this.scoreB>=11){
         this.phase='gameover';
         this.winner=(this.scoreA>=11)?'A':'B';
@@ -1063,17 +1056,15 @@
         return;
       }
 
-      // ✅ tras gol: saca el equipo que encaja y debe elegir esquina
-      this.turn = g.conceded; // el que recibió el gol
+      this.turn = g.conceded;
       this.pendingCornerTeam = g.conceded;
 
       this.phase='waitingCorner';
       this.input.resetSelection();
 
-      // preparar overlay
       const teamName = (this.pendingCornerTeam==='A') ? 'Equipo A' : 'Equipo B';
-      this.ui.cornerTitle.textContent = `Saque tras gol · ${teamName}`;
-      this.ui.cornerDesc.textContent = `El ${teamName} recibió el gol. Elige una de tus dos esquinas para sacar.`;
+      document.getElementById('cornerTitle').textContent = `Saque tras gol · ${teamName}`;
+      document.getElementById('cornerDesc').textContent = `El ${teamName} recibió el gol. Elige una de tus dos esquinas para sacar.`;
       this.setCornerOverlay(true);
 
       this.updateHUD();
@@ -1089,10 +1080,8 @@
       this.pendingCornerTeam=null;
       this.setCornerOverlay(false);
 
-      // pequeño cooldown visual post-gol
       this.pauseUntil=nowMs()+CONFIG.effects.goalPauseMs;
       this.phase='paused';
-
       this.updateHUD();
     }
 
@@ -1126,14 +1115,11 @@
       this.last=t;
       this.acc += dtFrame;
 
-      // ocultar banner
       if(t>=this.goalBannerUntil){
-        this.ui.goalBanner.classList.remove('show');
+        document.getElementById('goalBanner').classList.remove('show');
       }
 
-      // pausa post-acción
       if(this.phase==='paused' && t>=this.pauseUntil){
-        // si no hay overlay de esquina, volvemos a ready
         this.phase='ready';
         this.updateHUD();
       }
@@ -1153,7 +1139,6 @@
         }else{
           const elapsed=(t-this.simStartMs)/1000;
           if(this.allStopped() || elapsed>=CONFIG.physics.maxSimSeconds){
-            // detener y pasar turno (bola se queda donde cayó)
             this.ball.v.x=0; this.ball.v.y=0;
             this.phase='ready';
             this.turn=(this.turn==='A')?'B':'A';
@@ -1170,12 +1155,10 @@
     }
   }
 
-  // init
   const canvas=document.getElementById('c');
   const shell=document.getElementById('shell');
   new Game(canvas,shell);
 
-  // modal help
   document.getElementById('help').addEventListener('click', ()=>document.getElementById('helpBack').classList.add('show'));
   document.getElementById('closeHelp').addEventListener('click', ()=>document.getElementById('helpBack').classList.remove('show'));
   document.getElementById('helpBack').addEventListener('click', (e)=>{
@@ -1191,22 +1174,15 @@
 ============================================================
 CÓMO JUGAR
 ============================================================
-- Los palitos son fijos: no se mueven, solo actúan como obstáculos.
-- Inicio: se elige aleatoriamente el equipo que empieza y la bola se coloca en una esquina (arriba/abajo) de su campo (aleatoria).
-- En tu turno: click/toca la bola → arrastra (dirección + potencia) → suelta.
-- Si NO hay gol: la bola se juega desde donde se quede (no se recoloca entre turnos).
-- Gol: la bola entra completamente en la portería rival.
-- Tras gol: el equipo que encaja elige esquina superior/inferior para sacar (overlay con botones).
-- Al gol: se quita 1 palito del equipo que encaja y se apoya en el borde (visible).
-- Gana quien llegue a 11.
-
+- Click/toca la bola → arrastra → suelta.
+- La potencia ahora usa una curva t^1.8 (más suave al inicio).
+- Tras gol: saca el equipo que encaja y elige esquina.
 ============================================================
-PARÁMETROS RECOMENDADOS PARA AJUSTAR (CONFIG)
+PARÁMETROS PARA AJUSTAR
 ============================================================
-- CONFIG.shot.maxImpulse / maxDrag: fuerza del tiro.
-- CONFIG.ball.damp: fricción (más bajo = se frena antes).
-- CONFIG.physics.stopSpeed: umbral de parada.
-- CONFIG.cornerMargin: margen de colocación en esquinas.
+- CONFIG.shot.minSpeed / maxSpeed: rango de velocidades del tiro.
+- CONFIG.shot.responseCurve: 1.2..2.4 (más alto = más suave al principio).
+- CONFIG.ball.damp y CONFIG.ball.maxSpeed.
 -->
 </body>
 </html>
