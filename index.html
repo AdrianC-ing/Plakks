@@ -19,7 +19,7 @@
     }
     *{ box-sizing:border-box; }
 
-    /* ✅ CLAVE: height real para que flex calcule alturas correctamente */
+    /* ✅ altura real */
     html,body{
       height:100%;
       margin:0;
@@ -29,7 +29,6 @@
     }
 
     .wrap{
-      /* ✅ CLAVE: height (no solo min-height) */
       height:100%;
       display:flex;
       flex-direction:column;
@@ -50,7 +49,7 @@
       border-radius:14px;
       box-shadow: 0 12px 30px rgba(0,0,0,.25);
       backdrop-filter: blur(6px);
-      flex: 0 0 auto;
+      flex:0 0 auto;
     }
     .leftHeader{ display:flex; flex-direction:column; gap:4px; }
     .title{
@@ -168,19 +167,17 @@
       background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
       box-shadow: 0 18px 42px rgba(0,0,0,.32);
       overflow:hidden;
-
-      /* ✅ CLAVE: asegura altura real aunque el navegador "colapse" el flex */
       min-height: 520px;
     }
 
-    /* ✅ CLAVE: canvas absolute para rellenar TODO el contenedor */
+    /* ✅ Canvas “a prueba de balas”: rellena el contenedor y con fondo temporal */
     canvas{
       position:absolute;
       inset:0;
       width:100%;
       height:100%;
       display:block;
-      background: transparent;
+      background:#0a1020; /* temporal: confirma que se está pintando */
     }
 
     .overlayNote{
@@ -195,7 +192,7 @@
       backdrop-filter: blur(6px);
       box-shadow: 0 10px 24px rgba(0,0,0,.22);
       max-width:min(420px, calc(100% - 24px));
-      z-index: 5;
+      z-index:5;
     }
     .overlayNote b{ color:#ffffff; }
 
@@ -208,7 +205,7 @@
       pointer-events:none;
       opacity:0;
       transition: opacity .2s ease;
-      z-index: 6;
+      z-index:6;
     }
     .goalBanner.show{ opacity:1; }
     .goalText{
@@ -333,6 +330,14 @@
       Nota: el juego usa una física 2D estable (colisiones circulares, corrección de penetración, damping y rebotes) con estética pseudo-3D.
     </p>
   </div>
+</div>
+
+<!-- ✅ Overlay de errores en pantalla -->
+<div id="err"
+     style="position:fixed;left:12px;top:12px;max-width:min(900px,calc(100% - 24px));
+            padding:10px 12px;border-radius:12px;z-index:9999;display:none;
+            background:rgba(0,0,0,.75);border:1px solid rgba(255,255,255,.15);
+            color:#ffe4e6;font:600 12px/1.35 ui-sans-serif,system-ui;">
 </div>
 
 <script>
@@ -503,23 +508,39 @@ class Renderer{
     ctx.putImageData(img,0,0);
   }
 
+  /* ✅ resize “a prueba de balas”: fallback al padre y a tamaño fijo */
   resize(){
-    const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
-    const rect=this.canvas.getBoundingClientRect();
-    const w=Math.max(2, Math.floor(rect.width*dpr));
-    const h=Math.max(2, Math.floor(rect.height*dpr));
-    if(w===this._lastW && h===this._lastH) return;
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
 
-    this._lastW=w; this._lastH=h;
-    this.canvas.width=w; this.canvas.height=h;
+    let rect = this.canvas.getBoundingClientRect();
 
-    const pad=CONFIG.render.pitchMargin*dpr;
-    const sx=(w-pad*2)/CONFIG.world.w;
-    const sy=(h-pad*2)/CONFIG.world.h;
-    this.scale=Math.min(sx,sy);
-    this.offset=new Vec2(
-      (w-CONFIG.world.w*this.scale)*0.5,
-      (h-CONFIG.world.h*this.scale)*0.5
+    if(rect.width < 2 || rect.height < 2){
+      const parent = this.canvas.parentElement;
+      if(parent) rect = parent.getBoundingClientRect();
+    }
+
+    const cssW = Math.max(300, rect.width || 900);
+    const cssH = Math.max(300, rect.height || 540);
+
+    const w = Math.floor(cssW * dpr);
+    const h = Math.floor(cssH * dpr);
+
+    if(w === this._lastW && h === this._lastH) return;
+
+    this._lastW = w; this._lastH = h;
+    this.canvas.width = w;
+    this.canvas.height = h;
+
+    const pad = CONFIG.render.pitchMargin * dpr;
+    const sx = (w - pad*2) / CONFIG.world.w;
+    const sy = (h - pad*2) / CONFIG.world.h;
+    this.scale = Math.min(sx, sy);
+
+    if(!isFinite(this.scale) || this.scale <= 0) this.scale = 0.5;
+
+    this.offset = new Vec2(
+      (w - CONFIG.world.w * this.scale) * 0.5,
+      (h - CONFIG.world.h * this.scale) * 0.5
     );
   }
 
@@ -1411,8 +1432,26 @@ class Game{
   }
 }
 
-const canvas=document.getElementById('game');
-const game=new Game(canvas);
+/* ✅ Mostrar errores en overlay */
+function showErr(e){
+  const box=document.getElementById('err');
+  if(!box) return;
+  box.style.display='block';
+  box.textContent='ERROR: ' + (e?.stack || e?.message || String(e));
+}
+
+/* ✅ Arranque protegido + render inicial inmediato */
+try{
+  const canvas=document.getElementById('game');
+  if(!canvas) throw new Error('No encuentro <canvas id="game">');
+
+  const game=new Game(canvas);
+
+  // Forzar render inicial
+  game.renderer.draw();
+}catch(e){
+  showErr(e);
+}
 
 /*
 ============================================================
