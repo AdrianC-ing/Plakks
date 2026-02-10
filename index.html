@@ -135,7 +135,7 @@
       <h2 id="helpTitle">Ayuda · Reglas y controles</h2>
       <button id="closeHelp">Cerrar</button>
     </div>
-    <p><b>Objetivo:</b> gol cuando la bola entra completamente en la portería rival. El equipo que encaja retira 1 palito del campo. El rival suma 1. Gana quien llegue a 11 (deja al rival sin palitos).</p>
+    <p><b>Objetivo:</b> gol cuando la bola entra completamente en la portería rival. El equipo que encaja retira 1 palito (va al banquillo). El rival suma 1. Gana quien llegue a 11.</p>
     <ul>
       <li><b>Turnos:</b> alternan A/B. En tu turno haces <b>un</b> flick con <b>un</b> palito.</li>
       <li><b>Flick:</b> click en tu palito → arrastra (apunta + potencia) → suelta.</li>
@@ -171,8 +171,19 @@
       shadowOffset: { x: 10, y: 14 },
       shadowBlur: 16,
       vignette: true,
+      bench: {
+        enabled: true,
+        // Radio relativo de los palitos retirados (en pantalla): 0.70 = 70% del tamaño normal
+        scale: 0.70,
+        // Opacidad base para “retirados”
+        alpha: 0.62,
+        // Padding interno en la zona de margen
+        pad: 10,
+        // Separación entre palitos en el banquillo
+        gap: 8,
+      }
     },
-    effects: { goalBannerMs: 850, goalPauseMs: 450, rippleMs: 520 },
+    effects: { goalBannerMs: 850, goalPauseMs: 450 },
   };
 
   /* =========================
@@ -245,7 +256,6 @@
           b.v.mul(k);
         }
 
-        // paredes (rebote simple)
         const e=CONFIG.physics.wallRestitution;
         if(b.p.x-b.r<0){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e; }
         if(b.p.x+b.r>W){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e; }
@@ -275,7 +285,6 @@
         const invMassSum=a.invMass+b.invMass;
         if(invMassSum<=0) return;
 
-        // corrección de penetración
         const slop=CONFIG.physics.penetrationSlop;
         const percent=CONFIG.physics.penetrationPercent;
         const corr=Math.max(penetration-slop,0)/invMassSum*percent;
@@ -285,7 +294,6 @@
         b.p.x += normal.x*corr*b.invMass;
         b.p.y += normal.y*corr*b.invMass;
 
-        // impulso (solo si se acercan)
         const rv=new Vec2(b.v.x-a.v.x, b.v.y-a.v.y);
         const velAlongNormal=rv.dot(normal);
         if(velAlongNormal<0){
@@ -297,7 +305,6 @@
           a.v.x -= imp.x*a.invMass; a.v.y -= imp.y*a.invMass;
           b.v.x += imp.x*b.invMass; b.v.y += imp.y*b.invMass;
 
-          // fricción tangencial ligera
           const tangent=new Vec2(rv.x-velAlongNormal*normal.x, rv.y-velAlongNormal*normal.y);
           const tmag=tangent.mag();
           if(tmag>1e-6){
@@ -397,7 +404,6 @@
       this.roundRect(x0,y0,W*s,H*s,r);
       ctx.fill();
 
-      // bandas suaves
       ctx.globalAlpha=0.13;
       for(let i=0;i<10;i++){
         const yy=y0+(H*s)*(i/10);
@@ -406,12 +412,10 @@
       }
       ctx.globalAlpha=1;
 
-      // ruido
       ctx.globalAlpha=CONFIG.render.grassNoise;
       ctx.drawImage(this.noise,x0,y0,W*s,H*s);
       ctx.globalAlpha=1;
 
-      // líneas
       ctx.lineWidth=3*this.dpr;
       ctx.strokeStyle='rgba(245,255,245,.85)';
       this.roundRect(x0+2*this.dpr,y0+2*this.dpr,W*s-4*this.dpr,H*s-4*this.dpr,Math.max(2,r-6*this.dpr));
@@ -426,7 +430,6 @@
       ctx.arc(x0+(W*s)/2,y0+(H*s)/2,110*s,0,Math.PI*2);
       ctx.stroke();
 
-      // punto central
       ctx.fillStyle='rgba(245,255,245,.95)';
       ctx.beginPath();
       ctx.arc(x0+(W*s)/2,y0+(H*s)/2,5*this.dpr,0,Math.PI*2);
@@ -454,7 +457,6 @@
         const yB=this.oy+yBot*s;
         const d=depth*s;
 
-        // profundidad (poste trasero)
         ctx.save();
         ctx.lineWidth=2.5*this.dpr;
         ctx.strokeStyle='rgba(255,255,255,.32)';
@@ -463,7 +465,6 @@
         ctx.lineTo(xEdge+dir*d, yB-d*0.18);
         ctx.stroke();
 
-        // malla (líneas)
         ctx.globalAlpha=0.22;
         ctx.strokeStyle='rgba(255,255,255,.75)';
         for(let i=0;i<10;i++){
@@ -476,17 +477,16 @@
         }
         ctx.globalAlpha=1;
 
-        // postes delanteros
         const postX=xEdge+dir*(postR*s*0.15);
-        const r=postR*s;
+        const rr=postR*s;
 
         const drawPost = (x,y) => {
-          const grd=ctx.createRadialGradient(x-r*0.4,y-r*0.4,r*0.3,x,y,r*1.05);
+          const grd=ctx.createRadialGradient(x-rr*0.4,y-rr*0.4,rr*0.3,x,y,rr*1.05);
           grd.addColorStop(0,'rgba(255,255,255,.95)');
           grd.addColorStop(0.6,'rgba(255,255,255,.55)');
           grd.addColorStop(1,'rgba(255,255,255,.25)');
           ctx.fillStyle=grd;
-          ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(x,y,rr,0,Math.PI*2); ctx.fill();
           ctx.strokeStyle='rgba(0,0,0,.22)';
           ctx.lineWidth=1.2*this.dpr;
           ctx.stroke();
@@ -495,7 +495,6 @@
         drawPost(postX,yT);
         drawPost(postX,yB);
 
-        // travesaño vertical
         ctx.lineWidth=6*this.dpr;
         ctx.strokeStyle='rgba(255,255,255,.65)';
         ctx.beginPath();
@@ -510,16 +509,13 @@
       drawOne('right');
     }
 
-    drawShadow(body){
+    drawShadowAt(x,y,r,alpha=0.35){
       const ctx=this.ctx;
-      const p=this.w2s(body.p);
-      const r=body.r*this.scale;
       const off=CONFIG.render.shadowOffset;
-      const sx=p.x+off.x*this.dpr;
-      const sy=p.y+off.y*this.dpr;
-
+      const sx=x+off.x*this.dpr;
+      const sy=y+off.y*this.dpr;
       ctx.save();
-      ctx.globalAlpha=0.38;
+      ctx.globalAlpha=alpha;
       ctx.fillStyle='rgba(0,0,0,.55)';
       ctx.shadowColor='rgba(0,0,0,.55)';
       ctx.shadowBlur=CONFIG.render.shadowBlur*this.dpr;
@@ -527,6 +523,12 @@
       ctx.ellipse(sx,sy,r*1.05,r*0.78,0,0,Math.PI*2);
       ctx.fill();
       ctx.restore();
+    }
+
+    drawShadow(body){
+      const p=this.w2s(body.p);
+      const r=body.r*this.scale;
+      this.drawShadowAt(p.x,p.y,r,0.38);
     }
 
     drawBall(ball){
@@ -555,45 +557,62 @@
       ctx.restore();
     }
 
-    drawPeg(peg, selected){
+    // Dibuja palito en coordenadas de pantalla (para banquillo)
+    drawPegScreen(x,y,rScreen,team,dimmed=false,alpha=1,selected=false){
       const ctx=this.ctx;
-      const p=this.w2s(peg.p);
-      const r=peg.r*this.scale;
-      const base=(peg.team==='A')?{a:'#ff6b6b',b:'#b81f3d'}:{a:'#4da3ff',b:'#124fae'};
+      const base=(team==='A')?{a:'#ff6b6b',b:'#b81f3d'}:{a:'#4da3ff',b:'#124fae'};
 
       ctx.save();
-      const g=ctx.createRadialGradient(p.x-r*0.35,p.y-r*0.25,r*0.2,p.x,p.y,r*1.15);
+      ctx.globalAlpha = alpha;
+
+      const g=ctx.createRadialGradient(x-rScreen*0.35,y-rScreen*0.25,rScreen*0.2,x,y,rScreen*1.15);
       g.addColorStop(0,'rgba(255,255,255,.55)');
       g.addColorStop(0.18,base.a);
       g.addColorStop(1,base.b);
+
       ctx.fillStyle=g;
-      ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x,y,rScreen,0,Math.PI*2); ctx.fill();
 
       // highlight cilindro
-      ctx.globalAlpha=0.55;
-      const hg=ctx.createLinearGradient(p.x-r*0.7,p.y-r*0.2,p.x+r*0.7,p.y+r*0.2);
+      ctx.globalAlpha = alpha * (dimmed ? 0.40 : 0.55);
+      const hg=ctx.createLinearGradient(x-rScreen*0.7,y-rScreen*0.2,x+rScreen*0.7,y+rScreen*0.2);
       hg.addColorStop(0,'rgba(255,255,255,.0)');
       hg.addColorStop(0.38,'rgba(255,255,255,.42)');
       hg.addColorStop(0.62,'rgba(255,255,255,.12)');
       hg.addColorStop(1,'rgba(255,255,255,.0)');
       ctx.fillStyle=hg;
       ctx.beginPath();
-      ctx.ellipse(p.x-r*0.1,p.y-r*0.1,r*0.9,r*0.55,-0.55,0,Math.PI*2);
+      ctx.ellipse(x-rScreen*0.1,y-rScreen*0.1,rScreen*0.9,rScreen*0.55,-0.55,0,Math.PI*2);
       ctx.fill();
-      ctx.globalAlpha=1;
 
+      ctx.globalAlpha = alpha;
       ctx.strokeStyle='rgba(0,0,0,.22)';
-      ctx.lineWidth=1.4*this.dpr;
+      ctx.lineWidth=1.2*this.dpr;
       ctx.stroke();
+
+      if(dimmed){
+        // capa “apagado” para retirados
+        ctx.globalAlpha = alpha * 0.25;
+        ctx.fillStyle = 'rgba(0,0,0,.55)';
+        ctx.beginPath(); ctx.arc(x,y,rScreen,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha = alpha;
+      }
 
       if(selected){
         ctx.strokeStyle='rgba(125,211,252,.95)';
         ctx.lineWidth=3*this.dpr;
         ctx.beginPath();
-        ctx.arc(p.x,p.y,r+4*this.dpr,0,Math.PI*2);
+        ctx.arc(x,y,rScreen+3*this.dpr,0,Math.PI*2);
         ctx.stroke();
       }
+
       ctx.restore();
+    }
+
+    drawPeg(peg, selected){
+      const p=this.w2s(peg.p);
+      const r=peg.r*this.scale;
+      this.drawPegScreen(p.x,p.y,r,peg.team,false,1,selected);
     }
 
     drawAim(input){
@@ -634,7 +653,6 @@
       ctx.fillStyle=`rgba(125,211,252,${0.22+0.58*t})`;
       ctx.fill();
 
-      // barra potencia
       const bw=170*this.dpr, bh=10*this.dpr;
       const bx=this.ox+14*this.dpr, by=this.oy+(CONFIG.world.h*this.scale)-20*this.dpr;
       ctx.shadowBlur=0;
@@ -665,6 +683,93 @@
       ctx.restore();
     }
 
+    // ✅ NUEVO: dibujar banquillo con palitos retirados (no desaparecen)
+    drawBench(){
+      if(!CONFIG.render.bench.enabled) return;
+      const ctx=this.ctx;
+
+      const bench = CONFIG.render.bench;
+      const pad = bench.pad * this.dpr;
+      const gap = bench.gap * this.dpr;
+
+      // zona de margen real disponible a izquierda/derecha (entre canvas y pitch)
+      const leftX0 = 0;
+      const leftX1 = this.ox; // inicio del pitch
+      const rightX0 = this.ox + CONFIG.world.w * this.scale; // final pitch
+      const rightX1 = this.w;
+
+      // si no hay margen suficiente, aún así pintamos pequeño encima del césped en un borde
+      const leftWidth = Math.max(0, leftX1 - leftX0);
+      const rightWidth = Math.max(0, rightX1 - rightX0);
+
+      const listA = this.game.pegs.filter(p=>!p.active && p.team==='A');
+      const listB = this.game.pegs.filter(p=>!p.active && p.team==='B');
+
+      const drawSide = (team, list, x0, x1) => {
+        if(list.length===0) return;
+
+        const minW = 52*this.dpr;
+        let usableW = Math.max(minW, (x1-x0) - pad*2);
+        const colW = usableW; // usamos todo el ancho del margen
+
+        // radio en pantalla (relativo al normal)
+        const rNormal = CONFIG.peg.r * this.scale;
+        const r = Math.max(6*this.dpr, rNormal * bench.scale);
+
+        // layout en grid vertical con wrap a columnas
+        const step = (2*r + gap);
+        const maxRows = Math.floor((this.h - pad*2) / step);
+        const rows = Math.max(1, maxRows);
+
+        // cuántas columnas necesitamos
+        const cols = Math.ceil(list.length / rows);
+
+        // si el margen es estrecho, hacemos columnas finas
+        const colGap = 8*this.dpr;
+        const neededW = cols*(2*r) + (cols-1)*colGap;
+        const startX = (x0 + x1)/2 - neededW/2;
+
+        // panel sutil
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = 'rgba(0,0,0,.18)';
+        const panelX = Math.min(x0+pad, startX - 10*this.dpr);
+        const panelW = Math.max( (x1-x0)-pad*2, neededW + 20*this.dpr );
+        this.roundRect(panelX, pad, panelW, this.h - pad*2, 14*this.dpr);
+        ctx.fill();
+        ctx.restore();
+
+        // etiqueta “RETIRADOS”
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = 'rgba(234,240,255,.75)';
+        ctx.font = `${Math.floor(12*this.dpr)}px system-ui`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`RETIRADOS ${team}`, (x0+x1)/2, pad + 6*this.dpr);
+        ctx.restore();
+
+        // pegs
+        for(let i=0;i<list.length;i++){
+          const c = Math.floor(i / rows);
+          const rr = i % rows;
+
+          const cx = startX + c*(2*r + colGap) + r;
+          const cy = pad + 28*this.dpr + rr*step + r;
+
+          // sombra ligera
+          this.drawShadowAt(cx, cy, r, 0.22);
+
+          // palito retirado: dimmed + alpha configurada
+          this.drawPegScreen(cx, cy, r, team, true, bench.alpha, false);
+        }
+      };
+
+      // Izquierda: retirados A. Derecha: retirados B.
+      drawSide('A', listA, leftX0, leftX1);
+      drawSide('B', listB, rightX0, rightX1);
+    }
+
     draw(){
       this.resize();
       const ctx=this.ctx;
@@ -679,11 +784,13 @@
 
       for(const b of bodies) this.drawShadow(b);
 
-      // pegs + ball
       for(const b of bodies){
         if(b instanceof Ball) this.drawBall(b);
         else this.drawPeg(b, this.game.input.selected && this.game.input.selected.id===b.id);
       }
+
+      // ✅ banquillo: palitos retirados visibles
+      this.drawBench();
 
       this.drawAim(this.game.input);
       this.drawVignette();
@@ -719,7 +826,7 @@
       this.pointerDown=true;
       this.mouse=this.pos(e);
 
-      const wpos=this.r.s2w(this.mouse);
+      const wpos=this.game.renderer.s2w(this.mouse);
       const peg=this.game.pickPeg(wpos.x,wpos.y,this.game.turn);
 
       if(peg){
@@ -742,14 +849,14 @@
       const peg=this.selected;
       if(!peg.active || peg.team!==this.game.turn){ this.aiming=false; return; }
 
-      const sp=this.r.w2s(peg.p);
+      const sp=this.game.renderer.w2s(peg.p);
       const dx=this.mouse.x-sp.x, dy=this.mouse.y-sp.y;
       const dist=Math.hypot(dx,dy);
-      const maxD=CONFIG.flick.maxDrag*this.r.dpr;
+      const maxD=CONFIG.flick.maxDrag*this.game.renderer.dpr;
       const clamped=Math.min(dist,maxD);
       const t=clamped/maxD;
 
-      if(clamped>2*this.r.dpr){
+      if(clamped>2*this.game.renderer.dpr){
         const inv=1/(dist||1);
         const dir={ x:-dx*inv, y:-dy*inv };
         const impulse=lerp(CONFIG.flick.minImpulse, CONFIG.flick.maxImpulse, t);
@@ -779,7 +886,6 @@
 
       this.turn='A';
       this.scoreA=0; this.scoreB=0;
-      this.removedA=0; this.removedB=0;
       this.phase='ready'; // ready | sim | paused | gameover
       this.winner=null;
 
@@ -872,8 +978,9 @@
       return {
         turn:this.turn,
         scoreA:this.scoreA, scoreB:this.scoreB,
-        removedA:this.removedA, removedB:this.removedB,
         phase:this.phase, winner:this.winner,
+        goalBannerUntil:this.goalBannerUntil,
+        pauseUntil:this.pauseUntil,
         ball:{ p:{x:this.ball.p.x,y:this.ball.p.y}, v:{x:this.ball.v.x,y:this.ball.v.y}, active:this.ball.active },
         pegs:this.pegs.map(p=>({ id:p.id, team:p.team, active:p.active, p:{x:p.p.x,y:p.p.y}, v:{x:p.v.x,y:p.v.y} })),
       };
@@ -882,8 +989,10 @@
     applySnapshot(s){
       this.turn=s.turn;
       this.scoreA=s.scoreA; this.scoreB=s.scoreB;
-      this.removedA=s.removedA; this.removedB=s.removedB;
       this.phase=s.phase; this.winner=s.winner;
+
+      this.goalBannerUntil=s.goalBannerUntil||0;
+      this.pauseUntil=s.pauseUntil||0;
 
       this.ball.p.x=s.ball.p.x; this.ball.p.y=s.ball.p.y;
       this.ball.v.x=s.ball.v.x; this.ball.v.y=s.ball.v.y;
@@ -901,9 +1010,6 @@
       this.input.selected=null;
       this.input.aiming=false;
 
-      this.goalBannerUntil=0;
-      this.pauseUntil=0;
-
       this.updateHUD();
     }
 
@@ -918,7 +1024,6 @@
     reset(){
       this.turn='A';
       this.scoreA=0; this.scoreB=0;
-      this.removedA=0; this.removedB=0;
       this.phase='ready';
       this.winner=null;
 
@@ -974,12 +1079,9 @@
 
       const inMouth = (b.p.y>=yTop && b.p.y<=yBot);
 
-      // gol: la bola ha entrado completamente (centro +/- r)
       if(inMouth && (b.p.x + b.r < 0)) return { side:'left', scorer:'B', conceded:'A' };
       if(inMouth && (b.p.x - b.r > W)) return { side:'right', scorer:'A', conceded:'B' };
 
-      // si toca pared fuera de boca, rebote normal (ya lo hace la física)
-      // aquí solo evitamos “salidas” raras por acumulación numérica: clamp vertical
       if(b.p.y-b.r<0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*CONFIG.physics.wallRestitution; }
       if(b.p.y+b.r>H){ b.p.y=H-b.r; b.v.y=-Math.abs(b.v.y)*CONFIG.physics.wallRestitution; }
 
@@ -990,7 +1092,6 @@
       const candidates=this.pegs.filter(p=>p.active && p.team===team);
       if(!candidates.length) return;
 
-      // quita uno “lejos del balón” para que no parezca injusto
       let best=candidates[0], bestScore=-Infinity;
       for(const p of candidates){
         const dBall=hypot(p.p.x-this.ball.p.x, p.p.y-this.ball.p.y);
@@ -1006,31 +1107,24 @@
       if(this.phase==='gameover') return;
 
       if(g.scorer==='A') this.scoreA++; else this.scoreB++;
-      if(g.conceded==='A') this.removedA++; else this.removedB++;
-
       this.removeOnePeg(g.conceded);
 
       this.goalBannerUntil=nowMs()+CONFIG.effects.goalBannerMs;
       document.getElementById('goalBanner').classList.add('show');
 
-      // check win
       if(this.scoreA>=11 || this.scoreB>=11){
         this.phase='gameover';
         this.winner=(this.scoreA>=11)?'A':'B';
       }
 
-      // reinicio tras gol
       this.pauseUntil=nowMs()+CONFIG.effects.goalPauseMs;
       this.phase = (this.phase==='gameover') ? 'gameover' : 'paused';
 
-      // parar cuerpos
       for(const b of this.getActiveBodies()){ b.v.x=0; b.v.y=0; }
 
-      // bola al centro
       this.ball.p.x=CONFIG.world.w/2;
       this.ball.p.y=CONFIG.world.h/2;
 
-      // cambia turno SIEMPRE (regla simple)
       this.turn = (this.turn==='A')?'B':'A';
 
       this.input.selected=null;
@@ -1066,7 +1160,6 @@
       this.last=t;
       this.acc += dtFrame;
 
-      // goal banner hide
       if(t>=this.goalBannerUntil){
         document.getElementById('goalBanner').classList.remove('show');
       }
@@ -1095,7 +1188,6 @@
         }else{
           const elapsed=(t-this.simStartMs)/1000;
           if(this.allStopped() || elapsed>=CONFIG.physics.maxSimSeconds){
-            // stop clean
             for(const b of this.getActiveBodies()){ b.v.x=0; b.v.y=0; }
             this.phase='ready';
             this.turn=(this.turn==='A')?'B':'A';
@@ -1121,12 +1213,10 @@
     }
   }
 
-  // Init
   const canvas=document.getElementById('c');
   const shell=document.getElementById('shell');
   const game=new Game(canvas,shell);
 
-  // Help modal close on ESC
   window.addEventListener('keydown', (e)=>{
     if(e.key==='Escape') document.getElementById('helpBack').classList.remove('show');
   });
@@ -1143,18 +1233,19 @@ CÓMO JUGAR
 - Arrastra para apuntar y definir potencia; suelta para chutar.
 - El turno termina cuando todo se detiene, hay gol o se alcanza tiempo máximo.
 - Gol: la bola entra completamente en la portería rival.
-  El equipo que encaja retira 1 palito; el rival suma 1 punto.
+  El equipo que encaja NO desaparece: su palito pasa al banquillo (margen lateral).
 - Gana quien llegue a 11.
 
 ============================================================
 PARÁMETROS RECOMENDADOS PARA AJUSTAR (CONFIG)
 ============================================================
 - CONFIG.flick.maxImpulse / maxDrag: fuerza y recorrido del tiro.
-- CONFIG.ball.damp / CONFIG.peg.damp: fricción (más bajo = se para antes).
-- CONFIG.physics.wallRestitution: rebote en paredes.
+- CONFIG.ball.damp / CONFIG.peg.damp: fricción.
+- CONFIG.physics.wallRestitution: rebote.
 - CONFIG.physics.stopSpeed: umbral de parada.
-- CONFIG.goal.opening: tamaño de la boca de la portería.
-- CONFIG.debug.enabled: muestra/oculta debug.
+- CONFIG.goal.opening: tamaño boca portería.
+- CONFIG.render.bench.scale/alpha: tamaño y “apagado” de palitos retirados.
+- CONFIG.debug.enabled: debug on/off.
 -->
 </body>
 </html>
