@@ -53,7 +53,7 @@
     .note{
       position:absolute;left:12px;bottom:10px;z-index:5;
       padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.30);
-      border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.35;max-width:min(760px,calc(100% - 24px));
+      border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.35;max-width:min(840px,calc(100% - 24px));
       color:rgba(234,240,255,.8)
     }
     .note b{color:#fff}
@@ -115,7 +115,7 @@
   <div class="top">
     <div>
       <div class="title">PLAKKS-like Flick Soccer <span class="badge">pegs fijos</span></div>
-      <div class="sub">Tirachinas + móvil · Selección de bola más fácil · Palitos con forma de “palo” (cápsula) y sombra alargada</div>
+      <div class="sub">Porterías con hueco rectangular + “red” · Gol si la bola cruza completamente la línea</div>
     </div>
     <div class="hud">
       <div class="score" aria-label="Marcador">
@@ -151,8 +151,8 @@
     </div>
 
     <div class="note">
-      <b>Cómo chutar:</b> toca la <b>bola</b> → arrastra <b>hacia atrás</b> → suelta (sale hacia delante).<br/>
-      <span style="opacity:.9">Tip móvil: ahora la zona de toque de la bola es más grande (sin cambiar su tamaño visual).</span>
+      <b>Gol:</b> la bola debe pasar <b>completamente</b> la línea de gol (dentro del hueco rectangular).<br/>
+      <b>Chute:</b> toca la bola → arrastra hacia atrás → suelta.
     </div>
   </div>
 </div>
@@ -166,7 +166,7 @@
     <ul>
       <li><b>Turnos:</b> alternan A/B. En tu turno haces <b>un</b> chute con la <b>bola</b>.</li>
       <li><b>Tirachinas:</b> arrastra hacia atrás para cargar; la bola sale hacia delante.</li>
-      <li><b>Palitos:</b> fijos como obstáculos; se quitan al encajar gol (se apilan en el borde).</li>
+      <li><b>Gol:</b> cuando la bola cruza completamente la línea de gol dentro del hueco rectangular.</li>
       <li><b>Tras gol:</b> saca el equipo que encaja y elige esquina.</li>
     </ul>
   </div>
@@ -176,10 +176,18 @@
 (() => {
   const CONFIG = {
     world: { w: 1200, h: 720 },
-    goal: { opening: 220, depth: 46, postRadius: 10 },
+
+    goal: {
+      opening: 220,         // alto del hueco
+      depth: 60,            // profundidad visual
+      depthPhysics: 80,     // hasta dónde puede entrar la bola antes de “ser gol” (solo visual/escape)
+      postRadius: 10,
+      netCell: 18,          // tamaño de la cuadrícula de red (px mundo)
+      innerPadding: 10      // margen dentro del hueco
+    },
 
     ball: { r: 16, mass: 1.0, restitution: 0.90, damp: 0.994, maxSpeed: 1800 },
-    peg:  { r: 24, restitution: 0.55 }, // colisión sigue siendo circular (estable)
+    peg:  { r: 24, restitution: 0.55 },
 
     teams: { count: 11 },
 
@@ -213,17 +221,15 @@
       vignette: true,
       removed: { scale: 0.72, alpha: 0.68, pad: 10, gap: 8 },
 
-      // ✅ palito “palo” (cápsula) + sombra alargada
       pegVisual: {
-        widthMul: 1.05,      // ancho relativo a r
-        lengthMul: 2.65,     // largo relativo a r
-        tiltA: -0.18,        // rad
-        tiltB:  0.18,        // rad
+        widthMul: 1.05,
+        lengthMul: 2.65,
+        tiltA: -0.18,
+        tiltB:  0.18,
         shadowRxMul: 0.85,
         shadowRyMul: 0.30
       },
 
-      // ✅ selección de bola más fácil en móvil (en píxeles de pantalla)
       ballPickExtraCssPx: 18
     },
 
@@ -241,7 +247,6 @@
     mag(){return Math.hypot(this.x,this.y);}
     mul(s){this.x*=s;this.y*=s;return this;}
     dot(v){return this.x*v.x+this.y*v.y;}
-    static sub(a,b){return new Vec2(a.x-b.x,a.y-b.y);}
   }
 
   class Ball{
@@ -269,6 +274,14 @@
 
   class Physics{
     constructor(game){this.game=game;}
+
+    inGoalMouthY(y){
+      const H=CONFIG.world.h;
+      const open=CONFIG.goal.opening;
+      const yTop=(H-open)/2, yBot=yTop+open;
+      return (y>=yTop && y<=yBot);
+    }
+
     step(dt){
       const W=CONFIG.world.w, H=CONFIG.world.h;
       const b=this.game.ball;
@@ -285,8 +298,28 @@
       }
 
       const e=CONFIG.physics.wallRestitution;
-      if(b.p.x-b.r<0){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e; }
-      if(b.p.x+b.r>W){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e; }
+
+      // ✅ Pared izquierda/derecha: dejar pasar SOLO por el hueco de portería
+      const inMouth = this.inGoalMouthY(b.p.y);
+
+      // izquierda
+      if(b.p.x-b.r<0){
+        if(inMouth){
+          // deja pasar hacia la “red” (no rebote)
+        }else{
+          b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e;
+        }
+      }
+      // derecha
+      if(b.p.x+b.r>W){
+        if(inMouth){
+          // deja pasar hacia la “red” (no rebote)
+        }else{
+          b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e;
+        }
+      }
+
+      // arriba/abajo siempre rebotan
       if(b.p.y-b.r<0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*e; }
       if(b.p.y+b.r>H){ b.p.y=H-b.r; b.v.y=-Math.abs(b.v.y)*e; }
 
@@ -299,14 +332,14 @@
     }
 
     resolveBallPeg(ball, peg){
-      const n=new Vec2(ball.p.x-peg.p.x, ball.p.y-peg.p.y);
-      let dist=n.mag();
+      const dx=ball.p.x-peg.p.x, dy=ball.p.y-peg.p.y;
+      let dist=Math.hypot(dx,dy);
       const r=ball.r+peg.r;
       if(dist<=0) dist=0.0001;
 
       if(dist<r){
         const penetration=r-dist;
-        const nx=n.x/dist, ny=n.y/dist;
+        const nx=dx/dist, ny=dy/dist;
 
         const slop=CONFIG.physics.penetrationSlop;
         const percent=CONFIG.physics.penetrationPercent;
@@ -429,11 +462,13 @@
       ctx.drawImage(this.noise,x0,y0,W*s,H*s);
       ctx.globalAlpha=1;
 
+      // borde campo
       ctx.lineWidth=3*this.dpr;
       ctx.strokeStyle='rgba(245,255,245,.85)';
       this.roundRect(x0+2*this.dpr,y0+2*this.dpr,W*s-4*this.dpr,H*s-4*this.dpr,Math.max(2,r-6*this.dpr));
       ctx.stroke();
 
+      // línea central + círculo
       ctx.beginPath();
       ctx.moveTo(x0+(W*s)/2, y0+2*this.dpr);
       ctx.lineTo(x0+(W*s)/2, y0+H*s-2*this.dpr);
@@ -451,78 +486,114 @@
       ctx.restore();
     }
 
+    // ✅ Porterías con hueco rectangular y “red”
     drawGoals(){
       const ctx=this.ctx;
       const W=CONFIG.world.w, H=CONFIG.world.h;
       const open=CONFIG.goal.opening;
       const depth=CONFIG.goal.depth;
-      const postR=CONFIG.goal.postRadius;
-      const s=this.scale;
+      const pad=CONFIG.goal.innerPadding;
+      const cell=CONFIG.goal.netCell;
 
-      const drawOne = (side) => {
-        const dir = (side==='left')? 1 : -1;
-        const cx  = (side==='left')? 0 : W;
-        const yTop=(H-open)/2;
-        const yBot=yTop+open;
+      const yTop=(H-open)/2;
+      const yBot=yTop+open;
 
-        const xEdge=this.ox+cx*s;
-        const yT=this.oy+yTop*s;
-        const yB=this.oy+yBot*s;
-        const d=depth*s;
-
+      const drawNetRect = (x, y, w, h, alpha=0.20) => {
         ctx.save();
-        ctx.lineWidth=2.5*this.dpr;
-        ctx.strokeStyle='rgba(255,255,255,.32)';
+        ctx.globalAlpha=alpha;
+        ctx.strokeStyle='rgba(255,255,255,.75)';
+        ctx.lineWidth=1.1*this.dpr;
+
+        // cuadrícula
+        for(let yy=y; yy<=y+h; yy+=cell*this.scale){
+          ctx.beginPath(); ctx.moveTo(x,yy); ctx.lineTo(x+w,yy); ctx.stroke();
+        }
+        for(let xx=x; xx<=x+w; xx+=cell*this.scale){
+          ctx.beginPath(); ctx.moveTo(xx,y); ctx.lineTo(xx,y+h); ctx.stroke();
+        }
+        ctx.restore();
+      };
+
+      const drawGoal = (side) => {
+        const isLeft = side==='left';
+        const dir = isLeft ? 1 : -1;
+
+        const xLine = this.ox + (isLeft ? 0 : W*this.scale); // línea de gol
+        const y0 = this.oy + yTop*this.scale;
+        const h = open*this.scale;
+        const d = depth*this.scale;
+
+        // (1) hueco oscuro (para que se vea que hay “vacío”)
+        ctx.save();
+        const holeW = (10*this.scale); // grosor visual de la línea/hueco
+        ctx.fillStyle='rgba(0,0,0,.22)';
+        ctx.fillRect(isLeft ? xLine : xLine-holeW, y0, holeW, h);
+
+        // (2) “caja” de profundidad: rectángulo detrás de la línea
+        const innerX = isLeft ? (xLine + 1*this.dpr) : (xLine - d - 1*this.dpr);
+        const innerY = y0 + pad*this.scale;
+        const innerW = d;
+        const innerH = h - 2*pad*this.scale;
+
+        // fondo de la portería (más oscuro al fondo)
+        const bg = ctx.createLinearGradient(innerX, innerY, innerX + dir*innerW, innerY);
+        bg.addColorStop(0,'rgba(0,0,0,.12)');
+        bg.addColorStop(1,'rgba(0,0,0,.34)');
+        ctx.fillStyle=bg;
+        ctx.fillRect(innerX, innerY, innerW, innerH);
+
+        // (3) red: cuadrícula
+        drawNetRect(innerX, innerY, innerW, innerH, 0.22);
+
+        // (4) marco (poste+travesaño) en el plano de la línea
+        ctx.lineWidth=6*this.dpr;
+        ctx.strokeStyle='rgba(255,255,255,.80)';
         ctx.beginPath();
-        ctx.moveTo(xEdge+dir*d, yT+d*0.18);
-        ctx.lineTo(xEdge+dir*d, yB-d*0.18);
+        const xPost = isLeft ? xLine + 2*this.dpr : xLine - 2*this.dpr;
+        ctx.moveTo(xPost, y0);
+        ctx.lineTo(xPost, y0+h);
         ctx.stroke();
 
-        ctx.globalAlpha=0.22;
-        ctx.strokeStyle='rgba(255,255,255,.75)';
-        for(let i=0;i<10;i++){
-          const t=i/9;
-          const yy=yT+(yB-yT)*t;
-          ctx.beginPath();
-          ctx.moveTo(xEdge,yy);
-          ctx.lineTo(xEdge+dir*d,yy+d*0.10*dir);
-          ctx.stroke();
-        }
-        ctx.globalAlpha=1;
-
-        const postX=xEdge+dir*(postR*s*0.15);
-        const rr=postR*s;
-
-        const drawPost = (x,y) => {
-          const grd=ctx.createRadialGradient(x-rr*0.4,y-rr*0.4,rr*0.3,x,y,rr*1.05);
-          grd.addColorStop(0,'rgba(255,255,255,.95)');
-          grd.addColorStop(0.6,'rgba(255,255,255,.55)');
-          grd.addColorStop(1,'rgba(255,255,255,.25)');
-          ctx.fillStyle=grd;
-          ctx.beginPath(); ctx.arc(x,y,rr,0,Math.PI*2); ctx.fill();
-          ctx.strokeStyle='rgba(0,0,0,.22)';
-          ctx.lineWidth=1.2*this.dpr;
-          ctx.stroke();
-        };
-
-        drawPost(postX,yT);
-        drawPost(postX,yB);
-
-        ctx.lineWidth=6*this.dpr;
-        ctx.strokeStyle='rgba(255,255,255,.65)';
+        // travesaño arriba/abajo (pequeño)
+        ctx.lineWidth=4*this.dpr;
+        ctx.strokeStyle='rgba(255,255,255,.70)';
         ctx.beginPath();
-        ctx.moveTo(postX,yT);
-        ctx.lineTo(postX,yB);
+        ctx.moveTo(xPost, y0);
+        ctx.lineTo(xPost + dir*d*0.22, y0 + d*0.12);
+        ctx.moveTo(xPost, y0+h);
+        ctx.lineTo(xPost + dir*d*0.22, y0+h - d*0.12);
+        ctx.stroke();
+
+        // (5) contorno del hueco (rectángulo claro)
+        ctx.lineWidth=2.2*this.dpr;
+        ctx.strokeStyle='rgba(255,255,255,.78)';
+        ctx.strokeRect(isLeft ? xLine+1*this.dpr : xLine-1*this.dpr - 0, y0, 0.0001, h); // marca sutil de línea
+        // borde interior del hueco (para que se “lea” el rectángulo)
+        ctx.strokeStyle='rgba(255,255,255,.55)';
+        ctx.strokeRect(isLeft ? xLine+dir*0 : xLine+dir*0, y0, dir*0.0001, h);
+
+        // borde frontal del hueco (rectángulo)
+        ctx.lineWidth=3*this.dpr;
+        ctx.strokeStyle='rgba(255,255,255,.88)';
+        ctx.strokeRect(isLeft ? xLine+1*this.dpr : xLine-1*this.dpr, y0, 0.0001, h);
+
+        // (6) “boca” rectangular marcada (sin trucos: dibujar líneas superior/inferior del hueco)
+        ctx.lineWidth=3*this.dpr;
+        ctx.strokeStyle='rgba(245,255,245,.88)';
+        ctx.beginPath();
+        ctx.moveTo(xLine, y0);
+        ctx.lineTo(xLine + dir*d*0.26, y0 + d*0.10);
+        ctx.moveTo(xLine, y0+h);
+        ctx.lineTo(xLine + dir*d*0.26, y0+h - d*0.10);
         ctx.stroke();
 
         ctx.restore();
       };
 
-      drawOne('left');
-      drawOne('right');
+      drawGoal('left');
+      drawGoal('right');
     }
 
-    // ✅ sombra elíptica (para cilindro fino)
     drawShadowEllipse(x,y,rx,ry,alpha=0.35){
       const ctx=this.ctx;
       const off=CONFIG.render.shadowOffset;
@@ -544,7 +615,6 @@
       const p=this.w2s(ball.p);
       const r=ball.r*this.scale;
 
-      // sombra de bola (más redonda)
       this.drawShadowEllipse(p.x,p.y,r*1.05,r*0.78,0.40);
 
       ctx.save();
@@ -576,22 +646,20 @@
       ctx.restore();
     }
 
-    // ✅ Palito como “cápsula” (cilindro fino visto en pseudo-3D)
     drawPegRodScreen(x,y,rScreen,team,dimmed=false,alpha=1){
       const ctx=this.ctx;
       const base=(team==='A')?{a:'#4da3ff',b:'#124fae'}:{a:'#ff6b6b',b:'#b81f3d'};
       const pv=CONFIG.render.pegVisual;
 
-      const w = rScreen * pv.widthMul * 1.15;   // ancho visual
-      const h = rScreen * pv.lengthMul;         // largo visual
-      const rr = w * 0.55;                      // radio de la cápsula
+      const w = rScreen * pv.widthMul * 1.15;
+      const h = rScreen * pv.lengthMul;
+      const rr = w * 0.55;
       const rot = (team==='A') ? pv.tiltA : pv.tiltB;
 
       ctx.save();
       ctx.translate(x,y);
       ctx.rotate(rot);
 
-      // cuerpo (gradiente tipo cilindro)
       ctx.globalAlpha = alpha;
       const lg = ctx.createLinearGradient(-w*0.65, 0, w*0.65, 0);
       lg.addColorStop(0,'rgba(255,255,255,.10)');
@@ -604,12 +672,10 @@
       this.roundRect(-w/2, -h/2, w, h, rr);
       ctx.fill();
 
-      // borde
       ctx.strokeStyle='rgba(0,0,0,.20)';
       ctx.lineWidth=1.2*this.dpr;
       ctx.stroke();
 
-      // highlight lateral (brillo del “cilindro”)
       ctx.globalAlpha = alpha * (dimmed ? 0.25 : 0.40);
       const hg = ctx.createLinearGradient(-w/2,0,w/2,0);
       hg.addColorStop(0,'rgba(255,255,255,0)');
@@ -620,7 +686,6 @@
       this.roundRect(-w*0.42, -h*0.46, w*0.84, h*0.92, rr*0.95);
       ctx.fill();
 
-      // tapa superior (pequeño brillo arriba para dar altura)
       ctx.globalAlpha = alpha * (dimmed ? 0.16 : 0.24);
       const tg = ctx.createRadialGradient(0,-h*0.34, w*0.15, 0,-h*0.30, w*0.95);
       tg.addColorStop(0,'rgba(255,255,255,.55)');
@@ -644,7 +709,6 @@
       const p=this.w2s(peg.p);
       const r=peg.r*this.scale;
 
-      // sombra de cilindro fino (alargada, no esférica)
       const pv=CONFIG.render.pegVisual;
       const rx = r * pv.shadowRxMul;
       const ry = r * pv.lengthMul * pv.shadowRyMul;
@@ -808,7 +872,6 @@
       this.pointerDown=true;
       this.mouse=this.pos(e);
 
-      // ✅ selección más fácil en móvil (hitbox en pantalla)
       const b=this.game.ball;
       const bp=this.r.w2s(b.p);
       const dx=this.mouse.x-bp.x, dy=this.mouse.y-bp.y;
@@ -840,7 +903,7 @@
       const ball=this.game.ball;
       const bp=this.r.w2s(ball.p);
 
-      const dx=this.mouse.x-bp.x, dy=this.mouse.y-bp.y; // arrastre hacia atrás
+      const dx=this.mouse.x-bp.x, dy=this.mouse.y-bp.y;
       const dist=Math.hypot(dx,dy);
 
       const maxD=this.r.maxDragPx();
@@ -850,8 +913,6 @@
 
       if(clamped>3*this.r.dpr){
         const inv=1/(dist||1);
-
-        // Tirachinas: sale en dirección opuesta al arrastre
         const dir={ x:-dx*inv, y:-dy*inv };
 
         const targetSpeed = lerp(CONFIG.shot.minSpeed, CONFIG.shot.maxSpeed, t);
@@ -896,9 +957,7 @@
       this.bindUI();
       this.updateHUD();
 
-      // saque inicial aleatorio (esquina arriba/abajo)
       this.placeBallAtCornerForTeam(this.turn, Math.random()<0.5 ? 'top' : 'bottom');
-
       requestAnimationFrame(()=>this.loop());
     }
 
@@ -1035,6 +1094,7 @@
 
     allStopped(){ return this.ball.speed() <= CONFIG.physics.stopSpeed; }
 
+    // ✅ Gol si la bola cruza COMPLETAMENTE la línea de gol, dentro del hueco
     checkGoal(){
       const W=CONFIG.world.w, H=CONFIG.world.h;
       const open=CONFIG.goal.opening;
@@ -1042,8 +1102,12 @@
       const b=this.ball;
 
       const inMouth = (b.p.y>=yTop && b.p.y<=yBot);
+
+      // izquierda: toda la bola al otro lado (x + r < 0)
       if(inMouth && (b.p.x + b.r < 0)) return { scorer:'B', conceded:'A' };
+      // derecha: toda la bola al otro lado (x - r > W)
       if(inMouth && (b.p.x - b.r > W)) return { scorer:'A', conceded:'B' };
+
       return null;
     }
 
@@ -1067,7 +1131,10 @@
       this.goalBannerUntil=nowMs()+CONFIG.effects.goalBannerMs;
       document.getElementById('goalBanner').classList.add('show');
 
+      // reset bola a un punto “seguro” dentro del campo (evita quedarse fuera)
       this.ball.v.x=0; this.ball.v.y=0;
+      this.ball.p.x = CONFIG.world.w/2;
+      this.ball.p.y = CONFIG.world.h/2;
 
       if(this.scoreA>=11 || this.scoreB>=11){
         this.phase='gameover';
@@ -1195,16 +1262,16 @@
 ============================================================
 CÓMO JUGAR
 ============================================================
-- Toca la bola → arrastra hacia atrás → suelta.
-- Selección móvil: la hitbox de la bola es más grande (sin cambiar el tamaño visual).
-- Palitos: ahora se dibujan como “palo” (cápsula) y con sombra alargada acorde a cilindro fino.
+- Gol: la bola debe cruzar COMPLETAMENTE la línea de gol dentro del hueco rectangular.
+- La pared lateral NO rebota si la bola entra por el hueco (pasa a la “red”).
+- Chute: toca la bola → arrastra hacia atrás → suelta.
 
 ============================================================
 PARÁMETROS PARA AJUSTAR
 ============================================================
-- CONFIG.render.ballPickExtraCssPx: aumenta/disminuye la facilidad de toque (móvil).
-- CONFIG.render.pegVisual.lengthMul / widthMul: apariencia del “palo”.
-- CONFIG.render.pegVisual.shadowRxMul / shadowRyMul: forma de la sombra del palo.
+- CONFIG.goal.opening: tamaño del hueco.
+- CONFIG.goal.depth / netCell: apariencia de la red.
+- CONFIG.physics.wallRestitution: rebote en paredes (fuera de portería).
 -->
 </body>
 </html>
