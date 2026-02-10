@@ -53,7 +53,7 @@
     .note{
       position:absolute;left:12px;bottom:10px;z-index:5;
       padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.30);
-      border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.35;max-width:min(720px,calc(100% - 24px));
+      border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.35;max-width:min(760px,calc(100% - 24px));
       color:rgba(234,240,255,.8)
     }
     .note b{color:#fff}
@@ -115,7 +115,7 @@
   <div class="top">
     <div>
       <div class="title">PLAKKS-like Flick Soccer <span class="badge">pegs fijos</span></div>
-      <div class="sub">Tirachinas + potencia optimizada para móvil (drag máx dinámico) · Tras gol: el que encaja elige esquina</div>
+      <div class="sub">Tirachinas + móvil · Selección de bola más fácil · Palitos con forma de “palo” (cápsula) y sombra alargada</div>
     </div>
     <div class="hud">
       <div class="score" aria-label="Marcador">
@@ -152,7 +152,7 @@
 
     <div class="note">
       <b>Cómo chutar:</b> toca la <b>bola</b> → arrastra <b>hacia atrás</b> → suelta (sale hacia delante).<br/>
-      <span style="opacity:.9">En móvil no necesitas arrastrar demasiado: el “drag máx” se adapta al tamaño de pantalla.</span>
+      <span style="opacity:.9">Tip móvil: ahora la zona de toque de la bola es más grande (sin cambiar su tamaño visual).</span>
     </div>
   </div>
 </div>
@@ -166,7 +166,7 @@
     <ul>
       <li><b>Turnos:</b> alternan A/B. En tu turno haces <b>un</b> chute con la <b>bola</b>.</li>
       <li><b>Tirachinas:</b> arrastra hacia atrás para cargar; la bola sale hacia delante.</li>
-      <li><b>Palitos:</b> fijos. Solo se quitan cuando hay gol (se ven en el borde).</li>
+      <li><b>Palitos:</b> fijos como obstáculos; se quitan al encajar gol (se apilan en el borde).</li>
       <li><b>Tras gol:</b> saca el equipo que encaja y elige esquina.</li>
     </ul>
   </div>
@@ -174,28 +174,23 @@
 
 <script>
 (() => {
-  /* =========================
-     CONFIG
-  ========================= */
   const CONFIG = {
     world: { w: 1200, h: 720 },
     goal: { opening: 220, depth: 46, postRadius: 10 },
 
     ball: { r: 16, mass: 1.0, restitution: 0.90, damp: 0.994, maxSpeed: 1800 },
-    peg:  { r: 24, restitution: 0.55 },
+    peg:  { r: 24, restitution: 0.55 }, // colisión sigue siendo circular (estable)
 
     teams: { count: 11 },
 
-    // ✅ Drag máximo dinámico para móvil:
-    // maxDragPx = clamp(min(canvasW,canvasH)*maxDragFrac, minDragCssPx, maxDragCssPx) * dpr
     shot: {
       minSpeed: 140,
       maxSpeed: 980,
       responseCurve: 1.8,
       aimLineW: 3,
-      maxDragFrac: 0.18,    // 18% del lado menor del canvas
-      minDragCssPx: 90,     // mínimo razonable
-      maxDragCssPx: 160     // máximo razonable (evita arrastres enormes en desktop)
+      maxDragFrac: 0.18,
+      minDragCssPx: 90,
+      maxDragCssPx: 160
     },
 
     physics: {
@@ -217,18 +212,27 @@
       shadowBlur: 16,
       vignette: true,
       removed: { scale: 0.72, alpha: 0.68, pad: 10, gap: 8 },
+
+      // ✅ palito “palo” (cápsula) + sombra alargada
+      pegVisual: {
+        widthMul: 1.05,      // ancho relativo a r
+        lengthMul: 2.65,     // largo relativo a r
+        tiltA: -0.18,        // rad
+        tiltB:  0.18,        // rad
+        shadowRxMul: 0.85,
+        shadowRyMul: 0.30
+      },
+
+      // ✅ selección de bola más fácil en móvil (en píxeles de pantalla)
+      ballPickExtraCssPx: 18
     },
 
     effects: { goalBannerMs: 850, goalPauseMs: 520 },
     cornerMargin: 52,
   };
 
-  /* =========================
-     Utils
-  ========================= */
   const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
   const lerp = (a,b,t)=>a+(b-a)*t;
-  const hypot = (x,y)=>Math.hypot(x,y);
   const nowMs = ()=>performance.now();
   const rand = (a,b)=>a+Math.random()*(b-a);
 
@@ -377,9 +381,8 @@
     w2s(p){ return { x:this.ox+p.x*this.scale, y:this.oy+p.y*this.scale }; }
     s2w(p){ return { x:(p.x-this.ox)/this.scale, y:(p.y-this.oy)/this.scale }; }
 
-    // ✅ Drag máximo dinámico (en device px, para comparar con mouse.x/y)
     maxDragPx(){
-      const minSide = Math.min(this.w, this.h); // device px
+      const minSide = Math.min(this.w, this.h);
       const desired = minSide * CONFIG.shot.maxDragFrac;
       const minD = CONFIG.shot.minDragCssPx * this.dpr;
       const maxD = CONFIG.shot.maxDragCssPx * this.dpr;
@@ -519,7 +522,8 @@
       drawOne('right');
     }
 
-    drawShadowAt(x,y,r,alpha=0.35){
+    // ✅ sombra elíptica (para cilindro fino)
+    drawShadowEllipse(x,y,rx,ry,alpha=0.35){
       const ctx=this.ctx;
       const off=CONFIG.render.shadowOffset;
       const sx=x+off.x*this.dpr;
@@ -530,57 +534,9 @@
       ctx.shadowColor='rgba(0,0,0,.55)';
       ctx.shadowBlur=CONFIG.render.shadowBlur*this.dpr;
       ctx.beginPath();
-      ctx.ellipse(sx,sy,r*1.05,r*0.78,0,0,Math.PI*2);
+      ctx.ellipse(sx,sy,rx,ry,0,0,Math.PI*2);
       ctx.fill();
       ctx.restore();
-    }
-
-    drawPegScreen(x,y,rScreen,team,dimmed=false,alpha=1){
-      const ctx=this.ctx;
-      const base=(team==='A')?{a:'#4da3ff',b:'#124fae'}:{a:'#ff6b6b',b:'#b81f3d'};
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-
-      const g=ctx.createRadialGradient(x-rScreen*0.35,y-rScreen*0.25,rScreen*0.2,x,y,rScreen*1.15);
-      g.addColorStop(0,'rgba(255,255,255,.55)');
-      g.addColorStop(0.18,base.a);
-      g.addColorStop(1,base.b);
-
-      ctx.fillStyle=g;
-      ctx.beginPath(); ctx.arc(x,y,rScreen,0,Math.PI*2); ctx.fill();
-
-      ctx.globalAlpha = alpha * (dimmed ? 0.40 : 0.55);
-      const hg=ctx.createLinearGradient(x-rScreen*0.7,y-rScreen*0.2,x+rScreen*0.7,y+rScreen*0.2);
-      hg.addColorStop(0,'rgba(255,255,255,.0)');
-      hg.addColorStop(0.38,'rgba(255,255,255,.42)');
-      hg.addColorStop(0.62,'rgba(255,255,255,.12)');
-      hg.addColorStop(1,'rgba(255,255,255,.0)');
-      ctx.fillStyle=hg;
-      ctx.beginPath();
-      ctx.ellipse(x-rScreen*0.1,y-rScreen*0.1,rScreen*0.9,rScreen*0.55,-0.55,0,Math.PI*2);
-      ctx.fill();
-
-      ctx.globalAlpha = alpha;
-      ctx.strokeStyle='rgba(0,0,0,.22)';
-      ctx.lineWidth=1.2*this.dpr;
-      ctx.stroke();
-
-      if(dimmed){
-        ctx.globalAlpha = alpha * 0.25;
-        ctx.fillStyle = 'rgba(0,0,0,.55)';
-        ctx.beginPath(); ctx.arc(x,y,rScreen,0,Math.PI*2); ctx.fill();
-        ctx.globalAlpha = alpha;
-      }
-
-      ctx.restore();
-    }
-
-    drawPeg(peg){
-      const p=this.w2s(peg.p);
-      const r=peg.r*this.scale;
-      this.drawShadowAt(p.x,p.y,r,0.34);
-      this.drawPegScreen(p.x,p.y,r,peg.team,false,1);
     }
 
     drawBall(ball, selected){
@@ -588,7 +544,8 @@
       const p=this.w2s(ball.p);
       const r=ball.r*this.scale;
 
-      this.drawShadowAt(p.x,p.y,r,0.40);
+      // sombra de bola (más redonda)
+      this.drawShadowEllipse(p.x,p.y,r*1.05,r*0.78,0.40);
 
       ctx.save();
       const g=ctx.createRadialGradient(p.x-r*0.35,p.y-r*0.35,r*0.35,p.x,p.y,r*1.15);
@@ -619,6 +576,83 @@
       ctx.restore();
     }
 
+    // ✅ Palito como “cápsula” (cilindro fino visto en pseudo-3D)
+    drawPegRodScreen(x,y,rScreen,team,dimmed=false,alpha=1){
+      const ctx=this.ctx;
+      const base=(team==='A')?{a:'#4da3ff',b:'#124fae'}:{a:'#ff6b6b',b:'#b81f3d'};
+      const pv=CONFIG.render.pegVisual;
+
+      const w = rScreen * pv.widthMul * 1.15;   // ancho visual
+      const h = rScreen * pv.lengthMul;         // largo visual
+      const rr = w * 0.55;                      // radio de la cápsula
+      const rot = (team==='A') ? pv.tiltA : pv.tiltB;
+
+      ctx.save();
+      ctx.translate(x,y);
+      ctx.rotate(rot);
+
+      // cuerpo (gradiente tipo cilindro)
+      ctx.globalAlpha = alpha;
+      const lg = ctx.createLinearGradient(-w*0.65, 0, w*0.65, 0);
+      lg.addColorStop(0,'rgba(255,255,255,.10)');
+      lg.addColorStop(0.22,base.a);
+      lg.addColorStop(0.55,base.b);
+      lg.addColorStop(0.85,base.a);
+      lg.addColorStop(1,'rgba(0,0,0,.15)');
+
+      ctx.fillStyle = lg;
+      this.roundRect(-w/2, -h/2, w, h, rr);
+      ctx.fill();
+
+      // borde
+      ctx.strokeStyle='rgba(0,0,0,.20)';
+      ctx.lineWidth=1.2*this.dpr;
+      ctx.stroke();
+
+      // highlight lateral (brillo del “cilindro”)
+      ctx.globalAlpha = alpha * (dimmed ? 0.25 : 0.40);
+      const hg = ctx.createLinearGradient(-w/2,0,w/2,0);
+      hg.addColorStop(0,'rgba(255,255,255,0)');
+      hg.addColorStop(0.35,'rgba(255,255,255,.55)');
+      hg.addColorStop(0.55,'rgba(255,255,255,.12)');
+      hg.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle = hg;
+      this.roundRect(-w*0.42, -h*0.46, w*0.84, h*0.92, rr*0.95);
+      ctx.fill();
+
+      // tapa superior (pequeño brillo arriba para dar altura)
+      ctx.globalAlpha = alpha * (dimmed ? 0.16 : 0.24);
+      const tg = ctx.createRadialGradient(0,-h*0.34, w*0.15, 0,-h*0.30, w*0.95);
+      tg.addColorStop(0,'rgba(255,255,255,.55)');
+      tg.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle = tg;
+      ctx.beginPath();
+      ctx.ellipse(0, -h*0.35, w*0.52, w*0.34, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      if(dimmed){
+        ctx.globalAlpha = alpha * 0.25;
+        ctx.fillStyle = 'rgba(0,0,0,.55)';
+        this.roundRect(-w/2, -h/2, w, h, rr);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    drawPeg(peg){
+      const p=this.w2s(peg.p);
+      const r=peg.r*this.scale;
+
+      // sombra de cilindro fino (alargada, no esférica)
+      const pv=CONFIG.render.pegVisual;
+      const rx = r * pv.shadowRxMul;
+      const ry = r * pv.lengthMul * pv.shadowRyMul;
+      this.drawShadowEllipse(p.x,p.y,rx,ry,0.32);
+
+      this.drawPegRodScreen(p.x,p.y,r,peg.team,false,1);
+    }
+
     drawAim(input){
       if(!input.aiming || !input.ballSelected) return;
       const ctx=this.ctx;
@@ -629,7 +663,7 @@
       const dx=m.x-bp.x, dy=m.y-bp.y;
       const dist=Math.hypot(dx,dy);
 
-      const maxD=this.maxDragPx(); // ✅ dinámico
+      const maxD=this.maxDragPx();
       const clamped=Math.min(dist,maxD);
       const t=clamp(clamped/maxD,0,1);
 
@@ -694,12 +728,18 @@
       const xB = Math.min(this.w - (pad + r), rightEdge + (r + 10*this.dpr));
       const startY = pad + 30*this.dpr;
 
+      const pv=CONFIG.render.pegVisual;
+
       const drawStack = (team, list, x) => {
         for(let i=0;i<list.length;i++){
           const y = startY + i*step;
           if(y + r > this.h - pad) break;
-          this.drawShadowAt(x,y,r,0.18);
-          this.drawPegScreen(x,y,r,team,true,remCfg.alpha);
+
+          const rx = r * pv.shadowRxMul;
+          const ry = r * pv.lengthMul * pv.shadowRyMul;
+          this.drawShadowEllipse(x,y,rx,ry,0.16);
+
+          this.drawPegRodScreen(x,y,r,team,true,remCfg.alpha);
         }
       };
 
@@ -768,11 +808,17 @@
       this.pointerDown=true;
       this.mouse=this.pos(e);
 
-      const wpos=this.r.s2w(this.mouse);
+      // ✅ selección más fácil en móvil (hitbox en pantalla)
       const b=this.game.ball;
-      const d=hypot(wpos.x-b.p.x,wpos.y-b.p.y);
+      const bp=this.r.w2s(b.p);
+      const dx=this.mouse.x-bp.x, dy=this.mouse.y-bp.y;
+      const dist=Math.hypot(dx,dy);
 
-      if(d<=b.r*1.25){
+      const ballScreenR = b.r * this.r.scale;
+      const extra = CONFIG.render.ballPickExtraCssPx * this.r.dpr;
+      const pickR = ballScreenR + extra;
+
+      if(dist<=pickR){
         this.ballSelected=true;
         this.aiming=true;
       }else{
@@ -797,7 +843,7 @@
       const dx=this.mouse.x-bp.x, dy=this.mouse.y-bp.y; // arrastre hacia atrás
       const dist=Math.hypot(dx,dy);
 
-      const maxD=this.r.maxDragPx(); // ✅ dinámico
+      const maxD=this.r.maxDragPx();
       const clamped=Math.min(dist,maxD);
       const tRaw=clamp(clamped/maxD,0,1);
       const t = Math.pow(tRaw, CONFIG.shot.responseCurve);
@@ -825,16 +871,6 @@
     constructor(canvas,shell){
       this.canvas=canvas; this.shell=shell;
 
-      this.ui={
-        scoreA:document.getElementById('scoreA'),
-        scoreB:document.getElementById('scoreB'),
-        turnText:document.getElementById('turnText'),
-        turnPill:document.getElementById('turnPill'),
-        btnUndo:document.getElementById('undo'),
-        btnReset:document.getElementById('reset'),
-        btnHelp:document.getElementById('help'),
-      };
-
       this.scoreA=0; this.scoreB=0;
       this.turn = (Math.random()<0.5)?'A':'B';
       this.phase='ready';
@@ -860,7 +896,9 @@
       this.bindUI();
       this.updateHUD();
 
+      // saque inicial aleatorio (esquina arriba/abajo)
       this.placeBallAtCornerForTeam(this.turn, Math.random()<0.5 ? 'top' : 'bottom');
+
       requestAnimationFrame(()=>this.loop());
     }
 
@@ -1157,21 +1195,16 @@
 ============================================================
 CÓMO JUGAR
 ============================================================
-- Control tipo TIRACHINAS:
-  - Click/toca la bola → arrastra hacia atrás (carga) → suelta.
-  - La flecha se muestra hacia atrás (dirección de carga).
-  - La bola sale hacia delante (dirección opuesta al arrastre).
-- Potencia optimizada para móvil:
-  - El “drag máximo” se calcula como un % del tamaño real del canvas y se clampa entre 90px y 160px (CSS).
-- Palitos fijos: solo obstáculos. Se quitan al encajar gol y se ven en el borde.
-- Tras gol: saca el equipo que encaja y elige esquina superior/inferior.
+- Toca la bola → arrastra hacia atrás → suelta.
+- Selección móvil: la hitbox de la bola es más grande (sin cambiar el tamaño visual).
+- Palitos: ahora se dibujan como “palo” (cápsula) y con sombra alargada acorde a cilindro fino.
 
 ============================================================
 PARÁMETROS PARA AJUSTAR
 ============================================================
-- CONFIG.shot.maxDragFrac: sube/baja lo rápido que llegas al 100% (0.16..0.22 típico).
-- CONFIG.shot.minDragCssPx / maxDragCssPx: límites para móvil/desktop.
-- CONFIG.shot.minSpeed / maxSpeed: fuerza real del chut.
+- CONFIG.render.ballPickExtraCssPx: aumenta/disminuye la facilidad de toque (móvil).
+- CONFIG.render.pegVisual.lengthMul / widthMul: apariencia del “palo”.
+- CONFIG.render.pegVisual.shadowRxMul / shadowRyMul: forma de la sombra del palo.
 -->
 </body>
 </html>
