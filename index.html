@@ -115,7 +115,7 @@
   <div class="top">
     <div>
       <div class="title">PLAKKS-like Flick Soccer <span class="badge">pegs fijos</span></div>
-      <div class="sub">Tirachinas: cargas hacia atrás y la bola sale hacia delante · Tras gol: el que encaja elige esquina</div>
+      <div class="sub">Tirachinas + potencia optimizada para móvil (drag máx dinámico) · Tras gol: el que encaja elige esquina</div>
     </div>
     <div class="hud">
       <div class="score" aria-label="Marcador">
@@ -151,8 +151,8 @@
     </div>
 
     <div class="note">
-      <b>Cómo chutar:</b> click/toca la <b>bola</b> → arrastra <b>hacia atrás</b> para cargar → suelta (sale hacia delante).<br/>
-      <span style="opacity:.9">Potencia progresiva. Tras gol: el que encaja elige esquina.</span>
+      <b>Cómo chutar:</b> toca la <b>bola</b> → arrastra <b>hacia atrás</b> → suelta (sale hacia delante).<br/>
+      <span style="opacity:.9">En móvil no necesitas arrastrar demasiado: el “drag máx” se adapta al tamaño de pantalla.</span>
     </div>
   </div>
 </div>
@@ -165,11 +165,9 @@
     </div>
     <ul>
       <li><b>Turnos:</b> alternan A/B. En tu turno haces <b>un</b> chute con la <b>bola</b>.</li>
-      <li><b>Control:</b> estilo <b>tirachinas</b>: arrastra hacia atrás para cargar; la bola sale hacia delante.</li>
-      <li><b>Palitos:</b> fijos. Solo se quitan cuando hay gol.</li>
-      <li><b>Saque inicial:</b> esquina del equipo inicial (aleatoria).</li>
+      <li><b>Tirachinas:</b> arrastra hacia atrás para cargar; la bola sale hacia delante.</li>
+      <li><b>Palitos:</b> fijos. Solo se quitan cuando hay gol (se ven en el borde).</li>
       <li><b>Tras gol:</b> saca el equipo que encaja y elige esquina.</li>
-      <li><b>Si no hay gol:</b> la bola se juega desde donde quedó.</li>
     </ul>
   </div>
 </div>
@@ -184,17 +182,20 @@
     goal: { opening: 220, depth: 46, postRadius: 10 },
 
     ball: { r: 16, mass: 1.0, restitution: 0.90, damp: 0.994, maxSpeed: 1800 },
-    peg:  { r: 24, restitution: 0.55 }, // pegs fijos
+    peg:  { r: 24, restitution: 0.55 },
 
     teams: { count: 11 },
 
-    // Potencia progresiva (suave al principio)
+    // ✅ Drag máximo dinámico para móvil:
+    // maxDragPx = clamp(min(canvasW,canvasH)*maxDragFrac, minDragCssPx, maxDragCssPx) * dpr
     shot: {
-      maxDrag: 240,
       minSpeed: 140,
       maxSpeed: 980,
       responseCurve: 1.8,
-      aimLineW: 3
+      aimLineW: 3,
+      maxDragFrac: 0.18,    // 18% del lado menor del canvas
+      minDragCssPx: 90,     // mínimo razonable
+      maxDragCssPx: 160     // máximo razonable (evita arrastres enormes en desktop)
     },
 
     physics: {
@@ -237,7 +238,6 @@
     mul(s){this.x*=s;this.y*=s;return this;}
     dot(v){return this.x*v.x+this.y*v.y;}
     static sub(a,b){return new Vec2(a.x-b.x,a.y-b.y);}
-    static mul(a,s){return new Vec2(a.x*s,a.y*s);}
   }
 
   class Ball{
@@ -281,7 +281,6 @@
       }
 
       const e=CONFIG.physics.wallRestitution;
-
       if(b.p.x-b.r<0){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e; }
       if(b.p.x+b.r>W){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e; }
       if(b.p.y-b.r<0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*e; }
@@ -296,36 +295,35 @@
     }
 
     resolveBallPeg(ball, peg){
-      const n=Vec2.sub(ball.p, peg.p);
+      const n=new Vec2(ball.p.x-peg.p.x, ball.p.y-peg.p.y);
       let dist=n.mag();
       const r=ball.r+peg.r;
       if(dist<=0) dist=0.0001;
 
       if(dist<r){
         const penetration=r-dist;
-        const normal=n.mul(1/dist);
+        const nx=n.x/dist, ny=n.y/dist;
 
         const slop=CONFIG.physics.penetrationSlop;
         const percent=CONFIG.physics.penetrationPercent;
         const corr=Math.max(penetration-slop,0)*percent;
 
-        ball.p.x += normal.x*corr;
-        ball.p.y += normal.y*corr;
+        ball.p.x += nx*corr;
+        ball.p.y += ny*corr;
 
-        const v = ball.v;
-        const velAlong = v.dot(normal);
+        const velAlong = ball.v.x*nx + ball.v.y*ny;
 
         if(velAlong<0){
           const e = Math.min(ball.restitution, CONFIG.peg.restitution);
-          ball.v.x = v.x - (1+e)*velAlong*normal.x;
-          ball.v.y = v.y - (1+e)*velAlong*normal.y;
+          ball.v.x = ball.v.x - (1+e)*velAlong*nx;
+          ball.v.y = ball.v.y - (1+e)*velAlong*ny;
 
-          const tangent=new Vec2(v.x-velAlong*normal.x, v.y-velAlong*normal.y);
-          const tmag=tangent.mag();
+          const tx = ball.v.x - (ball.v.x*nx+ball.v.y*ny)*nx;
+          const ty = ball.v.y - (ball.v.x*nx+ball.v.y*ny)*ny;
+          const tmag = Math.hypot(tx,ty);
           if(tmag>1e-6){
-            tangent.mul(1/tmag);
-            ball.v.x -= tangent.x*3.0;
-            ball.v.y -= tangent.y*3.0;
+            ball.v.x -= (tx/tmag)*3.0;
+            ball.v.y -= (ty/tmag)*3.0;
           }
         }
       }
@@ -378,6 +376,15 @@
 
     w2s(p){ return { x:this.ox+p.x*this.scale, y:this.oy+p.y*this.scale }; }
     s2w(p){ return { x:(p.x-this.ox)/this.scale, y:(p.y-this.oy)/this.scale }; }
+
+    // ✅ Drag máximo dinámico (en device px, para comparar con mouse.x/y)
+    maxDragPx(){
+      const minSide = Math.min(this.w, this.h); // device px
+      const desired = minSide * CONFIG.shot.maxDragFrac;
+      const minD = CONFIG.shot.minDragCssPx * this.dpr;
+      const maxD = CONFIG.shot.maxDragCssPx * this.dpr;
+      return clamp(desired, minD, maxD);
+    }
 
     roundRect(x,y,w,h,r){
       const ctx=this.ctx;
@@ -472,7 +479,7 @@
         ctx.strokeStyle='rgba(255,255,255,.75)';
         for(let i=0;i<10;i++){
           const t=i/9;
-          const yy=lerp(yT+6*this.dpr,yB-6*this.dpr,t);
+          const yy=yT+(yB-yT)*t;
           ctx.beginPath();
           ctx.moveTo(xEdge,yy);
           ctx.lineTo(xEdge+dir*d,yy+d*0.10*dir);
@@ -612,7 +619,6 @@
       ctx.restore();
     }
 
-    // Flecha se muestra hacia donde arrastras (hacia atrás). La bola sale en dirección opuesta.
     drawAim(input){
       if(!input.aiming || !input.ballSelected) return;
       const ctx=this.ctx;
@@ -623,7 +629,7 @@
       const dx=m.x-bp.x, dy=m.y-bp.y;
       const dist=Math.hypot(dx,dy);
 
-      const maxD=CONFIG.shot.maxDrag*this.dpr;
+      const maxD=this.maxDragPx(); // ✅ dinámico
       const clamped=Math.min(dist,maxD);
       const t=clamp(clamped/maxD,0,1);
 
@@ -791,20 +797,18 @@
       const dx=this.mouse.x-bp.x, dy=this.mouse.y-bp.y; // arrastre hacia atrás
       const dist=Math.hypot(dx,dy);
 
-      const maxD=CONFIG.shot.maxDrag*this.r.dpr;
+      const maxD=this.r.maxDragPx(); // ✅ dinámico
       const clamped=Math.min(dist,maxD);
       const tRaw=clamp(clamped/maxD,0,1);
-
       const t = Math.pow(tRaw, CONFIG.shot.responseCurve);
 
       if(clamped>3*this.r.dpr){
         const inv=1/(dist||1);
 
-        // ✅ TIRACHINAS: sale en dirección opuesta al arrastre
+        // Tirachinas: sale en dirección opuesta al arrastre
         const dir={ x:-dx*inv, y:-dy*inv };
 
         const targetSpeed = lerp(CONFIG.shot.minSpeed, CONFIG.shot.maxSpeed, t);
-
         ball.v.x = dir.x * targetSpeed;
         ball.v.y = dir.y * targetSpeed;
 
@@ -829,17 +833,11 @@
         btnUndo:document.getElementById('undo'),
         btnReset:document.getElementById('reset'),
         btnHelp:document.getElementById('help'),
-        goalBanner:document.getElementById('goalBanner'),
-        cornerOverlay:document.getElementById('cornerOverlay'),
-        cornerTitle:document.getElementById('cornerTitle'),
-        cornerDesc:document.getElementById('cornerDesc'),
-        cornerTop:document.getElementById('cornerTop'),
-        cornerBottom:document.getElementById('cornerBottom'),
       };
 
       this.scoreA=0; this.scoreB=0;
       this.turn = (Math.random()<0.5)?'A':'B';
-      this.phase='ready'; // ready | sim | paused | waitingCorner | gameover
+      this.phase='ready';
       this.winner=null;
 
       this.ball=new Ball(CONFIG.world.w/2, CONFIG.world.h/2);
@@ -862,23 +860,22 @@
       this.bindUI();
       this.updateHUD();
 
-      // saque inicial aleatorio (esquina arriba/abajo)
       this.placeBallAtCornerForTeam(this.turn, Math.random()<0.5 ? 'top' : 'bottom');
-
       requestAnimationFrame(()=>this.loop());
     }
 
     bindUI(){
-      this.ui.btnReset.addEventListener('click', ()=>this.reset());
-      this.ui.btnUndo.addEventListener('click', ()=>this.undo());
-      this.ui.btnHelp.addEventListener('click', ()=>document.getElementById('helpBack').classList.add('show'));
+      document.getElementById('reset').addEventListener('click', ()=>this.reset());
+      document.getElementById('undo').addEventListener('click', ()=>this.undo());
+
+      document.getElementById('help').addEventListener('click', ()=>document.getElementById('helpBack').classList.add('show'));
       document.getElementById('closeHelp').addEventListener('click', ()=>document.getElementById('helpBack').classList.remove('show'));
       document.getElementById('helpBack').addEventListener('click', (e)=>{
         if(e.target.id==='helpBack') document.getElementById('helpBack').classList.remove('show');
       });
 
-      this.ui.cornerTop.addEventListener('click', ()=>this.chooseCorner('top'));
-      this.ui.cornerBottom.addEventListener('click', ()=>this.chooseCorner('bottom'));
+      document.getElementById('cornerTop').addEventListener('click', ()=>this.chooseCorner('top'));
+      document.getElementById('cornerBottom').addEventListener('click', ()=>this.chooseCorner('bottom'));
     }
 
     buildFixedLayout(){
@@ -887,30 +884,15 @@
 
       const A = [
         [90, H*0.50],
-        [220, H*0.20],
-        [240, H*0.38],
-        [240, H*0.62],
-        [220, H*0.80],
-        [360, H*0.22],
-        [380, H*0.40],
-        [380, H*0.60],
-        [360, H*0.78],
-        [520, H*0.32],
-        [520, H*0.68],
+        [220, H*0.20],[240, H*0.38],[240, H*0.62],[220, H*0.80],
+        [360, H*0.22],[380, H*0.40],[380, H*0.60],[360, H*0.78],
+        [520, H*0.32],[520, H*0.68],
       ];
-
       const B = [
         [W-90, H*0.50],
-        [W-220, H*0.20],
-        [W-240, H*0.38],
-        [W-240, H*0.62],
-        [W-220, H*0.80],
-        [W-360, H*0.22],
-        [W-380, H*0.40],
-        [W-380, H*0.60],
-        [W-360, H*0.78],
-        [W-520, H*0.32],
-        [W-520, H*0.68],
+        [W-220, H*0.20],[W-240, H*0.38],[W-240, H*0.62],[W-220, H*0.80],
+        [W-360, H*0.22],[W-380, H*0.40],[W-380, H*0.60],[W-360, H*0.78],
+        [W-520, H*0.32],[W-520, H*0.68],
       ];
 
       for(let i=0;i<CONFIG.teams.count;i++) this.pegs.push(new Peg(A[i][0],A[i][1],'A',`A${i}`));
@@ -923,11 +905,11 @@
     }
 
     updateHUD(){
-      this.ui.scoreA.textContent=String(this.scoreA);
-      this.ui.scoreB.textContent=String(this.scoreB);
-      this.ui.turnText.textContent=(this.turn==='A')?'Equipo A':'Equipo B';
-      this.ui.turnPill.style.background=(this.turn==='A')?'#4da3ff':'#ff6b6b';
-      this.ui.btnUndo.disabled = !this.undoSnap || this.phase!=='ready';
+      document.getElementById('scoreA').textContent=String(this.scoreA);
+      document.getElementById('scoreB').textContent=String(this.scoreB);
+      document.getElementById('turnText').textContent=(this.turn==='A')?'Equipo A':'Equipo B';
+      document.getElementById('turnPill').style.background=(this.turn==='A')?'#4da3ff':'#ff6b6b';
+      document.getElementById('undo').disabled = !this.undoSnap || this.phase!=='ready';
     }
 
     canShootNow(){
@@ -990,7 +972,6 @@
       this.input.resetSelection();
 
       this.placeBallAtCornerForTeam(this.turn, Math.random()<0.5 ? 'top' : 'bottom');
-
       this.setCornerOverlay(false);
       this.updateHUD();
     }
@@ -1014,9 +995,7 @@
       this.updateHUD();
     }
 
-    allStopped(){
-      return this.ball.speed() <= CONFIG.physics.stopSpeed;
-    }
+    allStopped(){ return this.ball.speed() <= CONFIG.physics.stopSpeed; }
 
     checkGoal(){
       const W=CONFIG.world.w, H=CONFIG.world.h;
@@ -1061,7 +1040,6 @@
         return;
       }
 
-      // Tras gol: saca el equipo que encaja y elige esquina
       this.turn = g.conceded;
       this.pendingCornerTeam = g.conceded;
 
@@ -1082,7 +1060,6 @@
       if(!team) return;
 
       this.placeBallAtCornerForTeam(team, which);
-
       this.pendingCornerTeam=null;
       this.setCornerOverlay(false);
 
@@ -1184,16 +1161,17 @@ CÓMO JUGAR
   - Click/toca la bola → arrastra hacia atrás (carga) → suelta.
   - La flecha se muestra hacia atrás (dirección de carga).
   - La bola sale hacia delante (dirección opuesta al arrastre).
+- Potencia optimizada para móvil:
+  - El “drag máximo” se calcula como un % del tamaño real del canvas y se clampa entre 90px y 160px (CSS).
 - Palitos fijos: solo obstáculos. Se quitan al encajar gol y se ven en el borde.
 - Tras gol: saca el equipo que encaja y elige esquina superior/inferior.
-- Si no hay gol: se juega desde donde quedó la bola.
 
 ============================================================
 PARÁMETROS PARA AJUSTAR
 ============================================================
-- CONFIG.shot.minSpeed / maxSpeed: rango de velocidades del tiro.
-- CONFIG.shot.responseCurve: 1.2..2.4 (más alto = más suave al principio).
-- CONFIG.ball.damp y CONFIG.ball.maxSpeed.
+- CONFIG.shot.maxDragFrac: sube/baja lo rápido que llegas al 100% (0.16..0.22 típico).
+- CONFIG.shot.minDragCssPx / maxDragCssPx: límites para móvil/desktop.
+- CONFIG.shot.minSpeed / maxSpeed: fuerza real del chut.
 -->
 </body>
 </html>
