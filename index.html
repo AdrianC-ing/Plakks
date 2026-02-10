@@ -53,7 +53,7 @@
     .note{
       position:absolute;left:12px;bottom:10px;z-index:5;
       padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.30);
-      border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.35;max-width:min(900px,calc(100% - 24px));
+      border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.35;max-width:min(960px,calc(100% - 24px));
       color:rgba(234,240,255,.8)
     }
     .note b{color:#fff}
@@ -92,7 +92,7 @@
     }
     .overlay.show{display:flex}
     .panel{
-      width:min(520px,calc(100% - 24px));
+      width:min(560px,calc(100% - 24px));
       border-radius:16px;border:1px solid rgba(255,255,255,.14);
       background:rgba(15,26,47,.94);
       box-shadow:0 26px 90px rgba(0,0,0,.55);
@@ -114,8 +114,8 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <div class="title">PLAKKS-like Flick Soccer <span class="badge">porterías con hueco</span></div>
-      <div class="sub">Las redes ahora van hacia AFUERA · El campo ya no es un rectángulo perfecto: tiene el hueco de las porterías</div>
+      <div class="title">PLAKKS-like Flick Soccer <span class="badge">quitar palito manual</span></div>
+      <div class="sub">Tras gol: eliges qué palito retirar · Los retirados quedan tumbados fuera del campo</div>
     </div>
     <div class="hud">
       <div class="score" aria-label="Marcador">
@@ -138,6 +138,16 @@
     <canvas id="c"></canvas>
     <div class="goalBanner" id="goalBanner"><div class="goalText">GOOOL</div></div>
 
+    <!-- Overlay: elegir palito a retirar -->
+    <div class="overlay" id="removeOverlay">
+      <div class="panel">
+        <h3 id="removeTitle">Elige el palito a retirar</h3>
+        <p id="removeDesc">Te han metido gol. Toca uno de tus palitos para retirarlo (quedará tumbado fuera del campo).</p>
+        <div class="hint">Consejo: el palito seleccionado se resaltará. Luego elegirás la esquina de saque.</div>
+      </div>
+    </div>
+
+    <!-- Overlay: elegir esquina de saque -->
     <div class="overlay" id="cornerOverlay">
       <div class="panel">
         <h3 id="cornerTitle">Elige esquina para sacar</h3>
@@ -151,8 +161,8 @@
     </div>
 
     <div class="note">
-      <b>Gol:</b> la bola cruza completamente la línea de gol dentro del hueco. La red está fuera del campo.<br/>
-      <b>Chute:</b> toca la bola → arrastra hacia atrás → suelta.
+      <b>Chute:</b> toca la bola → arrastra hacia atrás → suelta.<br/>
+      <b>Tras gol:</b> el equipo que encaja elige qué palito retirar, luego elige esquina para sacar.
     </div>
   </div>
 </div>
@@ -166,8 +176,9 @@
     <ul>
       <li><b>Turnos:</b> alternan A/B. En tu turno haces <b>un</b> chute con la <b>bola</b>.</li>
       <li><b>Tirachinas:</b> arrastra hacia atrás para cargar; la bola sale hacia delante.</li>
-      <li><b>Gol:</b> cuando la bola cruza completamente la línea de gol dentro del hueco rectangular.</li>
-      <li><b>Tras gol:</b> saca el equipo que encaja y elige esquina.</li>
+      <li><b>Gol:</b> cuando la bola cruza completamente la línea x=0 o x=W dentro del hueco de la portería.</li>
+      <li><b>Tras gol:</b> el equipo que encaja <b>elige</b> qué palito retirar; el palito queda tumbado fuera del campo.</li>
+      <li><b>Saque:</b> después eliges una de tus dos esquinas.</li>
     </ul>
   </div>
 </div>
@@ -178,14 +189,14 @@
     world: { w: 1200, h: 720 },
 
     goal: {
-      opening: 220,         // alto del hueco
-      boxDepth: 92,         // profundidad VISUAL del hueco hacia fuera (en mundo)
-      boxDepthPhysics: 110, // profundidad FÍSICA (rebote contra el fondo de la red)
-      netCell: 18,          // cuadrícula red (mundo)
-      innerPad: 10          // padding dentro del rectángulo de red
+      opening: 220,
+      boxDepth: 92,          // visual
+      boxDepthPhysics: 110,  // físico (fondo de red)
+      netCell: 18,
+      innerPad: 10
     },
 
-    ball: { r: 16, mass: 1.0, restitution: 0.90, damp: 0.994, maxSpeed: 1800 },
+    ball: { r: 16, restitution: 0.90, damp: 0.994, maxSpeed: 1800 },
     peg:  { r: 24, restitution: 0.55 },
     teams: { count: 11 },
 
@@ -204,7 +215,7 @@
       maxSubStepsPerFrame: 10,
       solverIterations: 2,
       wallRestitution: 0.86,
-      netRestitution: 0.55, // rebote amortiguado en el fondo de la red
+      netRestitution: 0.55,
       stopSpeed: 14,
       maxSimSeconds: 4.0,
       penetrationSlop: 0.02,
@@ -218,7 +229,15 @@
       shadowOffset: { x: 10, y: 14 },
       shadowBlur: 16,
       vignette: true,
-      removed: { scale: 0.72, alpha: 0.68, pad: 10, gap: 8 },
+
+      removed: {
+        scale: 0.78,
+        alpha: 0.82,
+        pad: 10,
+        gap: 10,
+        lieAngleBase: Math.PI/2, // tumbados
+        lieAngleJitter: 0.28
+      },
 
       pegVisual: {
         widthMul: 1.05,
@@ -229,7 +248,8 @@
         shadowRyMul: 0.30
       },
 
-      ballPickExtraCssPx: 18
+      ballPickExtraCssPx: 18,
+      pegPickExtraCssPx: 10
     },
 
     effects: { goalBannerMs: 850, goalPauseMs: 520 },
@@ -266,6 +286,9 @@
       this.team=team;
       this.id=id;
       this.active=true;
+
+      // para render tumbado fuera del campo
+      this.removedPose=null; // {x,y,angle} en coords mundo (x puede ser <0 o >W)
     }
   }
 
@@ -304,30 +327,25 @@
       const inMouth = this.inMouth(b.p.y);
       const dPhys = CONFIG.goal.boxDepthPhysics;
 
-      // --- Laterales con "hueco" de portería ---
-      // Fuera de la boca: pared en x=0 y x=W
+      // laterales con hueco
       if(!inMouth){
         if(b.p.x-b.r<0){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e; }
         if(b.p.x+b.r>W){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e; }
       }else{
-        // En la boca: permitimos entrar en la caja exterior
-        // Fondo de la red (izquierda)
+        // puede entrar en la red fuera del campo
         if(b.p.x - b.r < -dPhys){
           b.p.x = -dPhys + b.r;
           b.v.x = Math.abs(b.v.x) * en;
         }
-        // Fondo de la red (derecha)
         if(b.p.x + b.r > W + dPhys){
           b.p.x = W + dPhys - b.r;
           b.v.x = -Math.abs(b.v.x) * en;
         }
       }
 
-      // Arriba/abajo siempre rebotan
       if(b.p.y-b.r<0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*e; }
       if(b.p.y+b.r>H){ b.p.y=H-b.r; b.v.y=-Math.abs(b.v.y)*e; }
 
-      // Colisiones bola-pegs (pegs fijos, circular para estabilidad)
       for(let it=0; it<CONFIG.physics.solverIterations; it++){
         for(const p of this.game.pegs){
           if(!p.active) continue;
@@ -359,7 +377,6 @@
           ball.v.x = ball.v.x - (1+e)*velAlong*nx;
           ball.v.y = ball.v.y - (1+e)*velAlong*ny;
 
-          // fricción tangencial ligera
           const tx = ball.v.x - (ball.v.x*nx+ball.v.y*ny)*nx;
           const ty = ball.v.y - (ball.v.x*nx+ball.v.y*ny)*ny;
           const tmag = Math.hypot(tx,ty);
@@ -417,7 +434,6 @@
     }
 
     w2s(p){ return { x:this.ox+p.x*this.scale, y:this.oy+p.y*this.scale }; }
-    s2w(p){ return { x:(p.x-this.ox)/this.scale, y:(p.y-this.oy)/this.scale }; }
 
     maxDragPx(){
       const minSide = Math.min(this.w, this.h);
@@ -439,7 +455,6 @@
       ctx.closePath();
     }
 
-    // Color base del césped para "borrar" línea (hack limpio)
     grassFillAt(x0,y0,w,h){
       const ctx=this.ctx;
       const g=ctx.createLinearGradient(x0,y0,x0+w,y0+h);
@@ -455,23 +470,17 @@
       const x0=this.ox, y0=this.oy, s=this.scale;
       const r=CONFIG.render.pitchCornerR*this.dpr;
 
-      // --- bounds portería (en pantalla) ---
       const open=CONFIG.goal.opening;
-      const {yTop,yBot}=(() => {
-        const yt=(H-open)/2;
-        return {yTop:yt,yBot:yt+open};
-      })();
+      const yTop=(H-open)/2;
       const gy0=y0+yTop*s;
       const gh=open*s;
       const gDepth=CONFIG.goal.boxDepth*s;
 
-      // Fondo: campo principal (rectángulo redondeado)
       ctx.save();
       ctx.fillStyle=this.grassFillAt(x0,y0,W*s,H*s);
       this.roundRect(x0,y0,W*s,H*s,r);
       ctx.fill();
 
-      // Rayas césped (principal)
       ctx.globalAlpha=0.13;
       for(let i=0;i<10;i++){
         const yy=y0+(H*s)*(i/10);
@@ -480,40 +489,34 @@
       }
       ctx.globalAlpha=1;
 
-      // Ruido césped
       ctx.globalAlpha=CONFIG.render.grassNoise;
       ctx.drawImage(this.noise,x0,y0,W*s,H*s);
       ctx.globalAlpha=1;
 
-      // --- "Huecos" / cajas de portería hacia FUERA ---
-      // (Pintamos la caja exterior de césped un pelín más oscuro, para que se lea la forma)
+      // cajas de portería fuera
       ctx.fillStyle='rgba(0,0,0,.10)';
-      ctx.fillRect(x0-gDepth, gy0, gDepth, gh);        // izquierda fuera
-      ctx.fillRect(x0+W*s,  gy0, gDepth, gh);          // derecha fuera
+      ctx.fillRect(x0-gDepth, gy0, gDepth, gh);
+      ctx.fillRect(x0+W*s,  gy0, gDepth, gh);
 
-      // contorno blanco del campo (rectángulo principal)
+      // contorno campo principal
       ctx.lineWidth=3*this.dpr;
       ctx.strokeStyle='rgba(245,255,245,.85)';
       this.roundRect(x0+2*this.dpr,y0+2*this.dpr,W*s-4*this.dpr,H*s-4*this.dpr,Math.max(2,r-6*this.dpr));
       ctx.stroke();
 
-      // "cortar" el segmento de línea de gol donde está el hueco (borrar con césped)
+      // borrar tramo de línea en boca (para que se lea el hueco)
       ctx.save();
       ctx.strokeStyle=this.grassFillAt(x0,y0,W*s,H*s);
       ctx.lineWidth=8*this.dpr;
-      // izquierda: borrar endline x=x0 entre gy0..gy0+gh
       ctx.beginPath(); ctx.moveTo(x0, gy0); ctx.lineTo(x0, gy0+gh); ctx.stroke();
-      // derecha
       ctx.beginPath(); ctx.moveTo(x0+W*s, gy0); ctx.lineTo(x0+W*s, gy0+gh); ctx.stroke();
       ctx.restore();
 
-      // dibujar el contorno del "hueco" hacia fuera (caja de portería)
+      // contorno de los huecos
       ctx.lineWidth=3*this.dpr;
       ctx.strokeStyle='rgba(245,255,245,.88)';
-      // izquierda: rect exterior pegada al endline
       ctx.strokeRect(x0-gDepth, gy0, gDepth, gh);
-      // derecha
-      ctx.strokeRect(x0+W*s, gy0, gDepth, gh);
+      ctx.strokeRect(x0+W*s,  gy0, gDepth, gh);
 
       // línea central + círculo
       ctx.lineWidth=3*this.dpr;
@@ -535,7 +538,6 @@
       ctx.restore();
     }
 
-    // ✅ redes hacia AFUERA: izquierda en x<0, derecha en x>W
     drawGoals(){
       const ctx=this.ctx;
       const W=CONFIG.world.w, H=CONFIG.world.h;
@@ -545,72 +547,63 @@
       const cell=CONFIG.goal.netCell;
 
       const yTop=(H-open)/2;
-      const yBot=yTop+open;
+      const y0 = this.oy + yTop*this.scale;
+      const h = open*this.scale;
+      const d = depth*this.scale;
 
-      const drawNet = (x, y, w, h, alpha=0.22) => {
+      const drawNet = (x, y, w, hh, alpha=0.22) => {
         ctx.save();
         ctx.globalAlpha=alpha;
         ctx.strokeStyle='rgba(255,255,255,.75)';
         ctx.lineWidth=1.1*this.dpr;
-        for(let yy=y; yy<=y+h+0.001; yy+=cell*this.scale){
+        for(let yy=y; yy<=y+hh+0.001; yy+=cell*this.scale){
           ctx.beginPath(); ctx.moveTo(x,yy); ctx.lineTo(x+w,yy); ctx.stroke();
         }
         for(let xx=x; xx<=x+w+0.001; xx+=cell*this.scale){
-          ctx.beginPath(); ctx.moveTo(xx,y); ctx.lineTo(xx,y+h); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(xx,y); ctx.lineTo(xx,y+hh); ctx.stroke();
         }
         ctx.restore();
       };
 
-      const drawBox = (side) => {
-        const isLeft = side==='left';
+      const drawBox = (isLeft) => {
         const xLine = this.ox + (isLeft ? 0 : W*this.scale);
-        const y0 = this.oy + yTop*this.scale;
-        const h = open*this.scale;
-        const d = depth*this.scale;
-
-        // caja exterior
         const boxX = isLeft ? (xLine - d) : xLine;
         const boxY = y0;
-        const boxW = d;
-        const boxH = h;
 
-        // fondo ligeramente más oscuro hacia el fondo de la red (fuera)
         ctx.save();
         const bg = ctx.createLinearGradient(
           boxX, boxY,
-          isLeft ? (boxX - boxW) : (boxX + boxW),
+          isLeft ? (boxX - d) : (boxX + d),
           boxY
         );
         bg.addColorStop(0,'rgba(0,0,0,.10)');
         bg.addColorStop(1,'rgba(0,0,0,.34)');
         ctx.fillStyle=bg;
-        ctx.fillRect(boxX, boxY, boxW, boxH);
+        ctx.fillRect(boxX, boxY, d, h);
 
-        // red (dentro del hueco, no hacia el mediocampo)
-        const innerX = boxX + (isLeft ? pad*this.scale : pad*this.scale);
+        const innerX = boxX + pad*this.scale;
         const innerY = boxY + pad*this.scale;
-        const innerW = boxW - 2*pad*this.scale;
-        const innerH = boxH - 2*pad*this.scale;
+        const innerW = d - 2*pad*this.scale;
+        const innerH = h - 2*pad*this.scale;
         drawNet(innerX, innerY, innerW, innerH, 0.22);
 
-        // marco delantero (línea de gol) — postes arriba/abajo en la boca
+        // poste en la línea de gol
         ctx.lineWidth=5*this.dpr;
         ctx.strokeStyle='rgba(255,255,255,.85)';
         ctx.beginPath();
         ctx.moveTo(xLine, boxY);
-        ctx.lineTo(xLine, boxY+boxH);
+        ctx.lineTo(xLine, boxY+h);
         ctx.stroke();
 
-        // marco del rectángulo exterior (para que se lea el hueco)
+        // marco del hueco
         ctx.lineWidth=2.3*this.dpr;
         ctx.strokeStyle='rgba(255,255,255,.72)';
-        ctx.strokeRect(boxX, boxY, boxW, boxH);
-
+        ctx.strokeRect(boxX, boxY, d, h);
         ctx.restore();
       };
 
-      drawBox('left');
-      drawBox('right');
+      drawBox(true);
+      drawBox(false);
     }
 
     drawShadowEllipse(x,y,rx,ry,alpha=0.35){
@@ -665,7 +658,7 @@
       ctx.restore();
     }
 
-    drawPegRodScreen(x,y,rScreen,team,dimmed=false,alpha=1){
+    drawPegRodScreen(x,y,rScreen,team,dimmed=false,alpha=1,forcedRot=null){
       const ctx=this.ctx;
       const base=(team==='A')?{a:'#4da3ff',b:'#124fae'}:{a:'#ff6b6b',b:'#b81f3d'};
       const pv=CONFIG.render.pegVisual;
@@ -673,7 +666,7 @@
       const w = rScreen * pv.widthMul * 1.15;
       const h = rScreen * pv.lengthMul;
       const rr = w * 0.55;
-      const rot = (team==='A') ? pv.tiltA : pv.tiltB;
+      const rot = (forcedRot!==null) ? forcedRot : ((team==='A') ? pv.tiltA : pv.tiltB);
 
       ctx.save();
       ctx.translate(x,y);
@@ -715,7 +708,7 @@
       ctx.restore();
     }
 
-    drawPeg(peg){
+    drawPeg(peg, highlight=false, selectable=false){
       const p=this.w2s(peg.p);
       const r=peg.r*this.scale;
       const pv=CONFIG.render.pegVisual;
@@ -725,6 +718,27 @@
       this.drawShadowEllipse(p.x,p.y,rx,ry,0.32);
 
       this.drawPegRodScreen(p.x,p.y,r,peg.team,false,1);
+
+      const ctx=this.ctx;
+      if(selectable){
+        ctx.save();
+        ctx.globalAlpha=0.95;
+        ctx.strokeStyle='rgba(255,255,255,.65)';
+        ctx.lineWidth=2.2*this.dpr;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,r+7*this.dpr,0,Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if(highlight){
+        ctx.save();
+        ctx.strokeStyle='rgba(125,211,252,.95)';
+        ctx.lineWidth=3.2*this.dpr;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,r+8*this.dpr,0,Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     drawAim(input){
@@ -784,42 +798,28 @@
       ctx.restore();
     }
 
-    drawRemovedOnBorders(){
+    drawRemovedPegs(){
+      const ctx=this.ctx;
       const remCfg=CONFIG.render.removed;
-      const pad=remCfg.pad*this.dpr;
-      const gap=remCfg.gap*this.dpr;
-
-      const leftEdge = this.ox;
-      const rightEdge = this.ox + CONFIG.world.w*this.scale;
-
-      const listA = this.game.pegs.filter(p=>!p.active && p.team==='A');
-      const listB = this.game.pegs.filter(p=>!p.active && p.team==='B');
-
-      const rNormal = CONFIG.peg.r*this.scale;
-      const r = Math.max(6*this.dpr, rNormal*remCfg.scale);
-      const step = (2*r + gap);
-
-      const xA = Math.max(pad + r, leftEdge - (r + 10*this.dpr));
-      const xB = Math.min(this.w - (pad + r), rightEdge + (r + 10*this.dpr));
-      const startY = pad + 30*this.dpr;
-
       const pv=CONFIG.render.pegVisual;
 
-      const drawStack = (team, list, x) => {
-        for(let i=0;i<list.length;i++){
-          const y = startY + i*step;
-          if(y + r > this.h - pad) break;
+      const removed = this.game.pegs.filter(p=>!p.active && p.removedPose);
+      for(const p of removed){
+        const sp = this.w2s({x:p.removedPose.x, y:p.removedPose.y});
+        const r = (p.r*this.scale) * remCfg.scale;
 
-          const rx = r * pv.shadowRxMul;
-          const ry = r * pv.lengthMul * pv.shadowRyMul;
-          this.drawShadowEllipse(x,y,rx,ry,0.16);
+        const rx = r * pv.shadowRxMul;
+        const ry = r * pv.lengthMul * pv.shadowRyMul;
+        this.drawShadowEllipse(sp.x,sp.y,rx,ry,0.18);
 
-          this.drawPegRodScreen(x,y,r,team,true,remCfg.alpha);
-        }
-      };
-
-      drawStack('A', listA, xA);
-      drawStack('B', listB, xB);
+        this.drawPegRodScreen(
+          sp.x, sp.y, r,
+          p.team,
+          true,
+          remCfg.alpha,
+          p.removedPose.angle
+        );
+      }
     }
 
     drawVignette(){
@@ -843,13 +843,19 @@
       this.drawPitch();
       this.drawGoals();
 
+      // activos
+      const choosing = (this.game.phase==='chooseRemoval');
+      const mustTeam = this.game.pendingRemovalTeam;
+
       for(const p of this.game.pegs){
-        if(p.active) this.drawPeg(p);
+        if(!p.active) continue;
+        const selectable = choosing && (p.team===mustTeam);
+        const highlight = selectable && (this.game.hoverPegId===p.id);
+        this.drawPeg(p, highlight, selectable);
       }
 
       this.drawBall(this.game.ball, this.game.input.ballSelected);
-
-      this.drawRemovedOnBorders();
+      this.drawRemovedPegs();
       this.drawAim(this.game.input);
       this.drawVignette();
     }
@@ -876,24 +882,49 @@
       return { x:(e.clientX-rect.left)*dpr, y:(e.clientY-rect.top)*dpr };
     }
 
-    onDown(e){
-      if(this.game.phase!=='ready') return;
-      if(!this.game.canShootNow()) return;
-
-      this.pointerDown=true;
-      this.mouse=this.pos(e);
-
-      // selección bola con hitbox ampliada en pantalla
+    hitBall(screenPos){
       const b=this.game.ball;
       const bp=this.r.w2s(b.p);
-      const dx=this.mouse.x-bp.x, dy=this.mouse.y-bp.y;
+      const dx=screenPos.x-bp.x, dy=screenPos.y-bp.y;
       const dist=Math.hypot(dx,dy);
 
       const ballScreenR = b.r * this.r.scale;
       const extra = CONFIG.render.ballPickExtraCssPx * this.r.dpr;
-      const pickR = ballScreenR + extra;
+      return dist <= (ballScreenR + extra);
+    }
 
-      if(dist<=pickR){
+    hitPeg(screenPos, peg){
+      const pp=this.r.w2s(peg.p);
+      const dx=screenPos.x-pp.x, dy=screenPos.y-pp.y;
+      const dist=Math.hypot(dx,dy);
+
+      const pegScreenR = peg.r * this.r.scale;
+      const extra = CONFIG.render.pegPickExtraCssPx * this.r.dpr;
+      return dist <= (pegScreenR + extra);
+    }
+
+    onDown(e){
+      this.pointerDown=true;
+      this.mouse=this.pos(e);
+
+      // si estamos eligiendo palito a retirar, se selecciona con tap
+      if(this.game.phase==='chooseRemoval'){
+        const team=this.game.pendingRemovalTeam;
+        for(const p of this.game.pegs){
+          if(!p.active) continue;
+          if(p.team!==team) continue;
+          if(this.hitPeg(this.mouse, p)){
+            this.game.choosePegToRemove(p.id);
+            break;
+          }
+        }
+        return;
+      }
+
+      if(this.game.phase!=='ready') return;
+      if(!this.game.canShootNow()) return;
+
+      if(this.hitBall(this.mouse)){
         this.ballSelected=true;
         this.aiming=true;
       }else{
@@ -902,14 +933,27 @@
       }
     }
 
-    onMove(e){ this.mouse=this.pos(e); }
+    onMove(e){
+      this.mouse=this.pos(e);
+
+      if(this.game.phase==='chooseRemoval'){
+        const team=this.game.pendingRemovalTeam;
+        let hover=null;
+        for(const p of this.game.pegs){
+          if(!p.active) continue;
+          if(p.team!==team) continue;
+          if(this.hitPeg(this.mouse, p)){ hover=p.id; break; }
+        }
+        this.game.hoverPegId = hover;
+      }
+    }
 
     onUp(e){
       if(!this.pointerDown) return;
       this.pointerDown=false;
 
-      if(!this.aiming || !this.ballSelected) { this.aiming=false; return; }
       if(this.game.phase!=='ready') { this.aiming=false; return; }
+      if(!this.aiming || !this.ballSelected) { this.aiming=false; return; }
       if(!this.game.canShootNow()) { this.aiming=false; return; }
 
       const ball=this.game.ball;
@@ -925,13 +969,10 @@
 
       if(clamped>3*this.r.dpr){
         const inv=1/(dist||1);
-        // tirachinas: sale en dirección opuesta al arrastre
         const dir={ x:-dx*inv, y:-dy*inv };
-
         const targetSpeed = lerp(CONFIG.shot.minSpeed, CONFIG.shot.maxSpeed, t);
         ball.v.x = dir.x * targetSpeed;
         ball.v.y = dir.y * targetSpeed;
-
         this.game.onShot();
       }
 
@@ -962,7 +1003,11 @@
       this.goalBannerUntil=0;
       this.pauseUntil=0;
       this.simStartMs=0;
+
       this.pendingCornerTeam=null;
+      this.pendingRemovalTeam=null;
+      this.pendingGoal=null;
+      this.hoverPegId=null;
 
       this.acc=0;
       this.last=nowMs();
@@ -987,6 +1032,10 @@
 
       document.getElementById('cornerTop').addEventListener('click', ()=>this.chooseCorner('top'));
       document.getElementById('cornerBottom').addEventListener('click', ()=>this.chooseCorner('bottom'));
+    }
+
+    setOverlay(id, show){
+      document.getElementById(id).classList.toggle('show', !!show);
     }
 
     buildFixedLayout(){
@@ -1033,8 +1082,13 @@
         phase:this.phase, winner:this.winner,
         goalBannerUntil:this.goalBannerUntil, pauseUntil:this.pauseUntil,
         pendingCornerTeam:this.pendingCornerTeam,
+        pendingRemovalTeam:this.pendingRemovalTeam,
+        pendingGoal:this.pendingGoal,
         ball:{ p:{x:this.ball.p.x,y:this.ball.p.y}, v:{x:this.ball.v.x,y:this.ball.v.y} },
-        pegs:this.pegs.map(p=>({ id:p.id, team:p.team, active:p.active })),
+        pegs:this.pegs.map(p=>({
+          id:p.id, team:p.team, active:p.active,
+          removedPose: p.removedPose ? {x:p.removedPose.x,y:p.removedPose.y,angle:p.removedPose.angle} : null
+        })),
       };
     }
 
@@ -1044,6 +1098,8 @@
       this.goalBannerUntil=s.goalBannerUntil||0;
       this.pauseUntil=s.pauseUntil||0;
       this.pendingCornerTeam=s.pendingCornerTeam||null;
+      this.pendingRemovalTeam=s.pendingRemovalTeam||null;
+      this.pendingGoal=s.pendingGoal||null;
 
       this.ball.p.x=s.ball.p.x; this.ball.p.y=s.ball.p.y;
       this.ball.v.x=s.ball.v.x; this.ball.v.y=s.ball.v.y;
@@ -1051,11 +1107,15 @@
       const map=new Map(this.pegs.map(p=>[p.id,p]));
       for(const sp of s.pegs){
         const p=map.get(sp.id);
-        if(p) p.active=sp.active;
+        if(!p) continue;
+        p.active=sp.active;
+        p.removedPose = sp.removedPose ? {x:sp.removedPose.x,y:sp.removedPose.y,angle:sp.removedPose.angle} : null;
       }
 
+      this.hoverPegId=null;
       this.input.resetSelection();
-      this.setCornerOverlay(this.phase==='waitingCorner');
+      this.setOverlay('cornerOverlay', this.phase==='waitingCorner');
+      this.setOverlay('removeOverlay', this.phase==='chooseRemoval');
       this.updateHUD();
     }
 
@@ -1079,16 +1139,18 @@
       this.undoSnap=null;
       this.goalBannerUntil=0;
       this.pauseUntil=0;
+
       this.pendingCornerTeam=null;
+      this.pendingRemovalTeam=null;
+      this.pendingGoal=null;
+      this.hoverPegId=null;
+
       this.input.resetSelection();
+      this.setOverlay('cornerOverlay', false);
+      this.setOverlay('removeOverlay', false);
 
       this.placeBallAtCornerForTeam(this.turn, Math.random()<0.5 ? 'top' : 'bottom');
-      this.setCornerOverlay(false);
       this.updateHUD();
-    }
-
-    setCornerOverlay(show){
-      document.getElementById('cornerOverlay').classList.toggle('show', !!show);
     }
 
     placeBallAtCornerForTeam(team, which){
@@ -1108,7 +1170,6 @@
 
     allStopped(){ return this.ball.speed() <= CONFIG.physics.stopSpeed; }
 
-    // Gol si cruza COMPLETAMENTE la línea x=0 o x=W dentro del hueco (boca)
     checkGoal(){
       const W=CONFIG.world.w, H=CONFIG.world.h;
       const open=CONFIG.goal.opening;
@@ -1116,59 +1177,90 @@
       const b=this.ball;
 
       const inMouth = (b.p.y>=yTop && b.p.y<=yBot);
-
-      // izquierda
       if(inMouth && (b.p.x + b.r < 0)) return { scorer:'B', conceded:'A' };
-      // derecha
       if(inMouth && (b.p.x - b.r > W)) return { scorer:'A', conceded:'B' };
-
       return null;
     }
 
-    removeOnePeg(team){
-      const candidates=this.pegs.filter(p=>p.active && p.team===team);
-      if(!candidates.length) return;
+    // asigna una posición fuera del campo, tumbado, para el siguiente retirado de un equipo
+    nextRemovedPose(team){
+      const W=CONFIG.world.w, H=CONFIG.world.h;
+      const rem = CONFIG.render.removed;
+      const count = this.pegs.filter(p=>!p.active && p.team===team).length;
 
-      const targetX = (team==='A') ? 0 : CONFIG.world.w;
-      let best=candidates[0], bestScore=Infinity;
-      for(const p of candidates){
-        const score = Math.abs(p.p.x - targetX) * 1.0 + Math.abs(p.p.y - CONFIG.world.h/2) * 0.15;
-        if(score < bestScore){ bestScore=score; best=p; }
-      }
-      best.active=false;
+      const baseY = 60;
+      const stepY = 2*CONFIG.peg.r*rem.scale + 10;
+      const y = clamp(baseY + count*stepY, 60, H-60);
+
+      const x = (team==='A') ? (-CONFIG.goal.boxDepth - 40) : (W + CONFIG.goal.boxDepth + 40);
+
+      const angle = rem.lieAngleBase + rand(-rem.lieAngleJitter, rem.lieAngleJitter);
+      return {x, y, angle};
     }
 
-    applyGoal(g){
-      if(g.scorer==='A') this.scoreA++; else this.scoreB++;
-      this.removeOnePeg(g.conceded);
+    // llamada desde Input cuando el usuario toca un palito suyo para retirarlo
+    choosePegToRemove(pegId){
+      if(this.phase!=='chooseRemoval') return;
+      const team=this.pendingRemovalTeam;
+      const peg=this.pegs.find(p=>p.id===pegId);
+      if(!peg || !peg.active || peg.team!==team) return;
 
-      this.goalBannerUntil=nowMs()+CONFIG.effects.goalBannerMs;
-      document.getElementById('goalBanner').classList.add('show');
+      peg.active=false;
+      peg.removedPose=this.nextRemovedPose(team);
 
-      // Reposicionar a centro para evitar quedar en la red mientras aparece el modal de saque
-      this.ball.v.x=0; this.ball.v.y=0;
-      this.ball.p.x = CONFIG.world.w/2;
-      this.ball.p.y = CONFIG.world.h/2;
-
-      if(this.scoreA>=11 || this.scoreB>=11){
-        this.phase='gameover';
-        this.winner=(this.scoreA>=11)?'A':'B';
-        this.pendingCornerTeam=null;
-        this.setCornerOverlay(false);
-        this.updateHUD();
-        return;
-      }
-
-      this.turn = g.conceded;
-      this.pendingCornerTeam = g.conceded;
-
+      // ahora pasamos a elegir esquina
+      this.pendingCornerTeam = team;
+      this.pendingRemovalTeam = null;
       this.phase='waitingCorner';
-      this.input.resetSelection();
+      this.setOverlay('removeOverlay', false);
 
       const teamName = (this.pendingCornerTeam==='A') ? 'Equipo A' : 'Equipo B';
       document.getElementById('cornerTitle').textContent = `Saque tras gol · ${teamName}`;
       document.getElementById('cornerDesc').textContent = `El ${teamName} recibió el gol. Elige una de tus dos esquinas para sacar.`;
-      this.setCornerOverlay(true);
+      this.setOverlay('cornerOverlay', true);
+
+      this.updateHUD();
+    }
+
+    applyGoal(g){
+      // suma punto al que marca (goles = palitos retirados al rival)
+      if(g.scorer==='A') this.scoreA++; else this.scoreB++;
+
+      this.goalBannerUntil=nowMs()+CONFIG.effects.goalBannerMs;
+      document.getElementById('goalBanner').classList.add('show');
+
+      // deja la bola controlada
+      this.ball.v.x=0; this.ball.v.y=0;
+      this.ball.p.x = CONFIG.world.w/2;
+      this.ball.p.y = CONFIG.world.h/2;
+
+      // fin de partida?
+      if(this.scoreA>=11 || this.scoreB>=11){
+        this.phase='gameover';
+        this.winner=(this.scoreA>=11)?'A':'B';
+        this.pendingCornerTeam=null;
+        this.pendingRemovalTeam=null;
+        this.setOverlay('cornerOverlay', false);
+        this.setOverlay('removeOverlay', false);
+        this.updateHUD();
+        return;
+      }
+
+      // el equipo que encaja elige qué palito retirar
+      this.turn = g.conceded;
+      this.pendingRemovalTeam = g.conceded;
+      this.pendingCornerTeam = null;
+      this.pendingGoal = g;
+
+      this.phase='chooseRemoval';
+      this.hoverPegId=null;
+      this.input.resetSelection();
+
+      const teamName = (this.pendingRemovalTeam==='A') ? 'Equipo A' : 'Equipo B';
+      document.getElementById('removeTitle').textContent = `Retirar palito · ${teamName}`;
+      document.getElementById('removeDesc').textContent = `Te han metido gol. Toca uno de tus palitos (${teamName}) para retirarlo (quedará tumbado fuera del campo).`;
+      this.setOverlay('removeOverlay', true);
+      this.setOverlay('cornerOverlay', false);
 
       this.updateHUD();
     }
@@ -1180,8 +1272,8 @@
 
       this.placeBallAtCornerForTeam(team, which);
       this.pendingCornerTeam=null;
-      this.setCornerOverlay(false);
 
+      this.setOverlay('cornerOverlay', false);
       this.pauseUntil=nowMs()+CONFIG.effects.goalPauseMs;
       this.phase='paused';
       this.updateHUD();
@@ -1276,16 +1368,17 @@
 ============================================================
 CÓMO JUGAR
 ============================================================
-- Las porterías ahora son “huecos” hacia fuera: el campo tiene la caja de portería fuera del rectángulo principal.
-- Gol: bola cruza COMPLETAMENTE la línea de gol (x=0 o x=W) dentro de la boca (zona vertical del hueco).
-- En la boca, la bola puede entrar en la caja exterior y rebotar en el fondo de la red.
+- Metes gol si la bola cruza COMPLETAMENTE la línea de gol (x=0 o x=W) dentro de la boca de la portería.
+- Tras gol:
+  1) El equipo que encaja toca uno de sus palitos para retirarlo.
+  2) Ese palito queda tumbado fuera del campo y visible.
+  3) Luego elige esquina de saque.
 
 ============================================================
 PARÁMETROS PARA AJUSTAR
 ============================================================
-- CONFIG.goal.opening: alto de la boca.
-- CONFIG.goal.boxDepth / boxDepthPhysics: tamaño del hueco (visual / físico).
-- CONFIG.physics.netRestitution: rebote en el fondo de la red.
+- CONFIG.render.pegPickExtraCssPx: facilidad de tocar palitos al elegir cuál retirar.
+- CONFIG.render.removed.*: apariencia/colocación de los palitos tumbados.
 -->
 </body>
 </html>
