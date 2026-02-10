@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PLAKKS-like Flick Soccer (Pseudo-3D)</title>
+  <title>PLAKKS-like Flick Soccer (Ball Flick)</title>
   <style>
     html,body{height:100%;margin:0;background:#0b1220;color:#eaf0ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
     .wrap{height:100%;display:flex;flex-direction:column;padding:12px;gap:10px;max-width:1200px;margin:0 auto;}
@@ -24,8 +24,8 @@
     }
     .teamTag{display:flex;align-items:center;gap:8px;font-weight:900;font-size:12px}
     .dot{width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,.06)}
-    .dotA{background:#ff6b6b}
-    .dotB{background:#4da3ff}
+    .dotA{background:#4da3ff} /* A azul */
+    .dotB{background:#ff6b6b} /* B rojo */
     .scoreNum{font-weight:1000;font-size:20px;letter-spacing:.6px}
     .turn{
       padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.10);
@@ -53,7 +53,7 @@
     .note{
       position:absolute;left:12px;bottom:10px;z-index:5;
       padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.30);
-      border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.35;max-width:min(440px,calc(100% - 24px));
+      border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.35;max-width:min(560px,calc(100% - 24px));
       color:rgba(234,240,255,.8)
     }
     .note b{color:#fff}
@@ -98,8 +98,8 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <div class="title">PLAKKS-like Flick Soccer <span class="badge">pseudo-3D</span></div>
-      <div class="sub">Turnos alternos · Flick con un palito · Goles = palitos retirados al rival</div>
+      <div class="title">PLAKKS-like Flick Soccer <span class="badge">ball flick</span></div>
+      <div class="sub">Chutas la bola · Los palitos de ambos equipos estorban · Gol = quitas 1 palito al rival</div>
     </div>
     <div class="hud">
       <div class="score" aria-label="Marcador">
@@ -123,8 +123,8 @@
     <div class="dbg" id="dbg"></div>
     <div class="goalBanner" id="goalBanner"><div class="goalText">GOOOL</div></div>
     <div class="note">
-      <b>Cómo tirar:</b> click en tu palito → arrastra para apuntar → suelta para chutar.<br/>
-      <span style="opacity:.9">Si no puedes tirar, espera a que termine la simulación.</span>
+      <b>Cómo chutar:</b> toca/click en la <b>bola</b> → arrastra para marcar <b>dirección</b> y <b>potencia</b> → suelta.<br/>
+      <span style="opacity:.9">El saque sale desde una esquina de tu campo (se elige aleatoria). Los palitos de tu equipo también estorban.</span>
     </div>
   </div>
 </div>
@@ -135,12 +135,14 @@
       <h2 id="helpTitle">Ayuda · Reglas y controles</h2>
       <button id="closeHelp">Cerrar</button>
     </div>
-    <p><b>Objetivo:</b> gol cuando la bola entra completamente en la portería rival. El equipo que encaja retira 1 palito (va al banquillo). El rival suma 1. Gana quien llegue a 11.</p>
+    <p><b>Objetivo:</b> meter gol con la bola. Los palitos (de ambos equipos) hacen de obstáculos.</p>
     <ul>
-      <li><b>Turnos:</b> alternan A/B. En tu turno haces <b>un</b> flick con <b>un</b> palito.</li>
-      <li><b>Flick:</b> click en tu palito → arrastra (apunta + potencia) → suelta.</li>
-      <li><b>Sin faltas:</b> cualquier gol cuenta.</li>
-      <li><b>Deshacer:</b> restaura estado previo al último flick.</li>
+      <li><b>Turnos:</b> alternan A/B. En tu turno haces <b>un</b> chute con la <b>bola</b>.</li>
+      <li><b>Saque:</b> en tu turno, la bola aparece en <b>una esquina de tu campo</b> (aleatoria).</li>
+      <li><b>Control:</b> selecciona la bola → arrastra en la dirección del tiro (potencia = distancia) → suelta.</li>
+      <li><b>Gol:</b> si la bola entra completamente en la portería rival.</li>
+      <li><b>Al gol:</b> se quita 1 palito del equipo que encaja y se deja apoyado en el borde (visible).</li>
+      <li><b>Gana:</b> quien llega a 11 goles (deja al rival sin palitos).</li>
     </ul>
   </div>
 </div>
@@ -148,42 +150,57 @@
 <script>
 (() => {
   /* =========================
-     CONFIG
+     CONFIG (ajustable)
   ========================= */
   const CONFIG = {
-    debug: { enabled: true },
+    debug: { enabled: false },
+
     world: { w: 1200, h: 720 },
+
     goal: { opening: 220, depth: 46, postRadius: 10 },
-    ball: { r: 16, mass: 1.0, restitution: 0.92, damp: 0.995, maxSpeed: 2400 },
-    peg:  { r: 24, mass: 3.0, restitution: 0.65, damp: 0.992, maxSpeed: 2200 },
+
+    ball: { r: 16, mass: 1.0, restitution: 0.90, damp: 0.994, maxSpeed: 2600 },
+
+    peg:  { r: 24, mass: 5.0, restitution: 0.55, damp: 0.992, maxSpeed: 2200 },
+
     teams: { count: 11 },
-    flick: { maxDrag: 160, minImpulse: 120, maxImpulse: 1800, aimLineW: 3 },
-    physics: {
-      dt: 1/120, maxSubStepsPerFrame: 10, solverIterations: 4,
-      wallRestitution: 0.86,
-      stopSpeed: 16, maxSimSeconds: 4.0,
-      penetrationSlop: 0.02, penetrationPercent: 0.9,
+
+    shot: {
+      maxDrag: 210,        // píxeles CSS aprox (se escala con dpr internamente)
+      minImpulse: 280,
+      maxImpulse: 2200,
+      aimLineW: 3
     },
+
+    physics: {
+      dt: 1/120,
+      maxSubStepsPerFrame: 10,
+      solverIterations: 5,
+      wallRestitution: 0.86,
+      stopSpeed: 14,
+      maxSimSeconds: 4.0,
+      penetrationSlop: 0.02,
+      penetrationPercent: 0.92,
+    },
+
     render: {
-      pitchMargin: 28,
+      pitchMargin: 34,
       pitchCornerR: 38,
       grassNoise: 0.06,
       shadowOffset: { x: 10, y: 14 },
       shadowBlur: 16,
       vignette: true,
-      bench: {
-        enabled: true,
-        // Radio relativo de los palitos retirados (en pantalla): 0.70 = 70% del tamaño normal
-        scale: 0.70,
-        // Opacidad base para “retirados”
-        alpha: 0.62,
-        // Padding interno en la zona de margen
+
+      removed: {
+        // palitos retirados se apoyan en el borde (izq para A, der para B)
+        scale: 0.72,
+        alpha: 0.68,
         pad: 10,
-        // Separación entre palitos en el banquillo
         gap: 8,
       }
     },
-    effects: { goalBannerMs: 850, goalPauseMs: 450 },
+
+    effects: { goalBannerMs: 850, goalPauseMs: 520 },
   };
 
   /* =========================
@@ -193,7 +210,7 @@
   const lerp = (a,b,t) => a + (b-a)*t;
   const hypot = (x,y) => Math.hypot(x,y);
   const nowMs = () => performance.now();
-  const deepClone = (o) => JSON.parse(JSON.stringify(o));
+  const rand = (a,b)=>a+Math.random()*(b-a);
 
   class Vec2{
     constructor(x=0,y=0){this.x=x;this.y=y;}
@@ -218,6 +235,7 @@
     }
     speed(){return this.v.mag();}
   }
+
   class Ball extends Body{
     constructor(x,y){
       super(x,y,CONFIG.ball.r,CONFIG.ball.mass);
@@ -226,6 +244,7 @@
       this.maxSpeed=CONFIG.ball.maxSpeed;
     }
   }
+
   class Peg extends Body{
     constructor(x,y,team,id){
       super(x,y,CONFIG.peg.r,CONFIG.peg.mass);
@@ -234,7 +253,6 @@
       this.restitution=CONFIG.peg.restitution;
       this.damp=CONFIG.peg.damp;
       this.maxSpeed=CONFIG.peg.maxSpeed;
-      this.spinHint=(Math.random()*2-1)*0.35;
     }
   }
 
@@ -257,6 +275,8 @@
         }
 
         const e=CONFIG.physics.wallRestitution;
+
+        // Rebotes en límites del campo (la "salida" por portería se detecta aparte)
         if(b.p.x-b.r<0){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e; }
         if(b.p.x+b.r>W){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e; }
         if(b.p.y-b.r<0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*e; }
@@ -274,6 +294,7 @@
 
     resolveCircles(a,b){
       if(!a.active || !b.active) return;
+
       const n=Vec2.sub(b.p,a.p);
       let dist=n.mag();
       const r=a.r+b.r;
@@ -285,6 +306,7 @@
         const invMassSum=a.invMass+b.invMass;
         if(invMassSum<=0) return;
 
+        // corrección penetración
         const slop=CONFIG.physics.penetrationSlop;
         const percent=CONFIG.physics.penetrationPercent;
         const corr=Math.max(penetration-slop,0)/invMassSum*percent;
@@ -294,8 +316,10 @@
         b.p.x += normal.x*corr*b.invMass;
         b.p.y += normal.y*corr*b.invMass;
 
+        // impulso
         const rv=new Vec2(b.v.x-a.v.x, b.v.y-a.v.y);
         const velAlongNormal=rv.dot(normal);
+
         if(velAlongNormal<0){
           const e=Math.min(a.restitution,b.restitution);
           let j=-(1+e)*velAlongNormal;
@@ -305,11 +329,12 @@
           a.v.x -= imp.x*a.invMass; a.v.y -= imp.y*a.invMass;
           b.v.x += imp.x*b.invMass; b.v.y += imp.y*b.invMass;
 
+          // fricción tangencial pequeña
           const tangent=new Vec2(rv.x-velAlongNormal*normal.x, rv.y-velAlongNormal*normal.y);
           const tmag=tangent.mag();
           if(tmag>1e-6){
             tangent.mul(1/tmag);
-            const jt=-rv.dot(tangent)*0.03;
+            const jt=-rv.dot(tangent)*0.025;
             const timp=Vec2.mul(tangent,jt);
             a.v.x -= timp.x*a.invMass; a.v.y -= timp.y*a.invMass;
             b.v.x += timp.x*b.invMass; b.v.y += timp.y*b.invMass;
@@ -525,16 +550,12 @@
       ctx.restore();
     }
 
-    drawShadow(body){
-      const p=this.w2s(body.p);
-      const r=body.r*this.scale;
-      this.drawShadowAt(p.x,p.y,r,0.38);
-    }
-
-    drawBall(ball){
+    drawBall(ball, selected){
       const ctx=this.ctx;
       const p=this.w2s(ball.p);
       const r=ball.r*this.scale;
+
+      this.drawShadowAt(p.x,p.y,r,0.40);
 
       ctx.save();
       const g=ctx.createRadialGradient(p.x-r*0.35,p.y-r*0.35,r*0.35,p.x,p.y,r*1.15);
@@ -554,13 +575,22 @@
       ctx.ellipse(p.x-r*0.25,p.y-r*0.35,r*0.35,r*0.25,-0.6,0,Math.PI*2);
       ctx.fill();
 
+      if(selected){
+        ctx.globalAlpha=1;
+        ctx.strokeStyle='rgba(125,211,252,.95)';
+        ctx.lineWidth=3*this.dpr;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,r+4*this.dpr,0,Math.PI*2);
+        ctx.stroke();
+      }
+
       ctx.restore();
     }
 
-    // Dibuja palito en coordenadas de pantalla (para banquillo)
-    drawPegScreen(x,y,rScreen,team,dimmed=false,alpha=1,selected=false){
+    drawPegScreen(x,y,rScreen,team,dimmed=false,alpha=1){
       const ctx=this.ctx;
-      const base=(team==='A')?{a:'#ff6b6b',b:'#b81f3d'}:{a:'#4da3ff',b:'#124fae'};
+      // A azul (como foto), B rojo
+      const base=(team==='A')?{a:'#4da3ff',b:'#124fae'}:{a:'#ff6b6b',b:'#b81f3d'};
 
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -573,7 +603,6 @@
       ctx.fillStyle=g;
       ctx.beginPath(); ctx.arc(x,y,rScreen,0,Math.PI*2); ctx.fill();
 
-      // highlight cilindro
       ctx.globalAlpha = alpha * (dimmed ? 0.40 : 0.55);
       const hg=ctx.createLinearGradient(x-rScreen*0.7,y-rScreen*0.2,x+rScreen*0.7,y+rScreen*0.2);
       hg.addColorStop(0,'rgba(255,255,255,.0)');
@@ -591,58 +620,53 @@
       ctx.stroke();
 
       if(dimmed){
-        // capa “apagado” para retirados
         ctx.globalAlpha = alpha * 0.25;
         ctx.fillStyle = 'rgba(0,0,0,.55)';
         ctx.beginPath(); ctx.arc(x,y,rScreen,0,Math.PI*2); ctx.fill();
         ctx.globalAlpha = alpha;
       }
 
-      if(selected){
-        ctx.strokeStyle='rgba(125,211,252,.95)';
-        ctx.lineWidth=3*this.dpr;
-        ctx.beginPath();
-        ctx.arc(x,y,rScreen+3*this.dpr,0,Math.PI*2);
-        ctx.stroke();
-      }
-
       ctx.restore();
     }
 
-    drawPeg(peg, selected){
+    drawPeg(peg){
       const p=this.w2s(peg.p);
       const r=peg.r*this.scale;
-      this.drawPegScreen(p.x,p.y,r,peg.team,false,1,selected);
+      this.drawShadowAt(p.x,p.y,r,0.34);
+      this.drawPegScreen(p.x,p.y,r,peg.team,false,1);
     }
 
     drawAim(input){
-      if(!input.aiming || !input.selected) return;
-      const peg=input.selected;
-      if(!peg.active) return;
-
+      if(!input.aiming || !input.ballSelected) return;
       const ctx=this.ctx;
-      const p=this.w2s(peg.p);
+
+      const ball=this.game.ball;
+      const bp=this.w2s(ball.p);
       const m=input.mouse;
-      const dx=m.x-p.x, dy=m.y-p.y;
+      const dx=m.x-bp.x, dy=m.y-bp.y;
       const dist=Math.hypot(dx,dy);
-      const maxD=CONFIG.flick.maxDrag*this.dpr;
-      const t=clamp(dist/maxD,0,1);
+
+      const maxD=CONFIG.shot.maxDrag*this.dpr;
+      const clamped=Math.min(dist,maxD);
+      const t=clamp(clamped/maxD,0,1);
 
       ctx.save();
-      ctx.lineWidth=CONFIG.flick.aimLineW*this.dpr;
+      ctx.lineWidth=CONFIG.shot.aimLineW*this.dpr;
       ctx.lineCap='round';
-      ctx.strokeStyle=`rgba(125,211,252,${0.18+0.62*t})`;
+      ctx.strokeStyle=`rgba(125,211,252,${0.20+0.65*t})`;
       ctx.shadowColor='rgba(0,0,0,.35)';
       ctx.shadowBlur=10*this.dpr;
 
-      const k=clamp(maxD/(dist||1),0,1);
-      const ex=p.x+dx*k, ey=p.y+dy*k;
+      // línea hacia el punto de arrastre (dirección del tiro)
+      const k=(dist>1e-6)?(clamped/dist):0;
+      const ex=bp.x+dx*k, ey=bp.y+dy*k;
 
       ctx.beginPath();
-      ctx.moveTo(p.x,p.y);
+      ctx.moveTo(bp.x,bp.y);
       ctx.lineTo(ex,ey);
       ctx.stroke();
 
+      // flecha
       const ang=Math.atan2(dy,dx);
       const ah=10*this.dpr;
       ctx.beginPath();
@@ -650,10 +674,11 @@
       ctx.lineTo(ex-Math.cos(ang-0.55)*ah, ey-Math.sin(ang-0.55)*ah);
       ctx.lineTo(ex-Math.cos(ang+0.55)*ah, ey-Math.sin(ang+0.55)*ah);
       ctx.closePath();
-      ctx.fillStyle=`rgba(125,211,252,${0.22+0.58*t})`;
+      ctx.fillStyle=`rgba(125,211,252,${0.25+0.60*t})`;
       ctx.fill();
 
-      const bw=170*this.dpr, bh=10*this.dpr;
+      // barra potencia
+      const bw=190*this.dpr, bh=10*this.dpr;
       const bx=this.ox+14*this.dpr, by=this.oy+(CONFIG.world.h*this.scale)-20*this.dpr;
       ctx.shadowBlur=0;
       ctx.fillStyle='rgba(0,0,0,.25)';
@@ -670,6 +695,56 @@
       ctx.restore();
     }
 
+    drawRemovedOnBorders(){
+      const remCfg=CONFIG.render.removed;
+      const pad=remCfg.pad*this.dpr;
+      const gap=remCfg.gap*this.dpr;
+
+      const leftEdge = this.ox; // borde del césped
+      const rightEdge = this.ox + CONFIG.world.w*this.scale;
+
+      const listA = this.game.pegs.filter(p=>!p.active && p.team==='A');
+      const listB = this.game.pegs.filter(p=>!p.active && p.team==='B');
+
+      const rNormal = CONFIG.peg.r*this.scale;
+      const r = Math.max(6*this.dpr, rNormal*remCfg.scale);
+      const step = (2*r + gap);
+
+      // Apoyados en el "borde" (madera): fuera del césped, pero cerca.
+      const xA = Math.max(pad + r, leftEdge - (r + 10*this.dpr));
+      const xB = Math.min(this.w - (pad + r), rightEdge + (r + 10*this.dpr));
+
+      const startY = pad + 30*this.dpr;
+
+      const drawStack = (team, list, x) => {
+        for(let i=0;i<list.length;i++){
+          const y = startY + i*step;
+          if(y + r > this.h - pad) break;
+
+          this.drawShadowAt(x,y,r,0.18);
+          this.drawPegScreen(x,y,r,team,true,remCfg.alpha);
+        }
+
+        // contador si no caben
+        const max = Math.floor((this.h - (startY+pad)) / step);
+        if(list.length > max){
+          const ctx=this.ctx;
+          ctx.save();
+          ctx.fillStyle='rgba(0,0,0,.35)';
+          this.roundRect(x - 22*this.dpr, this.h - (pad+22*this.dpr), 44*this.dpr, 22*this.dpr, 8*this.dpr);
+          ctx.fill();
+          ctx.fillStyle='rgba(234,240,255,.9)';
+          ctx.font=`${Math.floor(12*this.dpr)}px system-ui`;
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText(`+${list.length-max}`, x, this.h - (pad+11*this.dpr));
+          ctx.restore();
+        }
+      };
+
+      drawStack('A', listA, xA);
+      drawStack('B', listB, xB);
+    }
+
     drawVignette(){
       if(!CONFIG.render.vignette) return;
       const ctx=this.ctx;
@@ -683,93 +758,6 @@
       ctx.restore();
     }
 
-    // ✅ NUEVO: dibujar banquillo con palitos retirados (no desaparecen)
-    drawBench(){
-      if(!CONFIG.render.bench.enabled) return;
-      const ctx=this.ctx;
-
-      const bench = CONFIG.render.bench;
-      const pad = bench.pad * this.dpr;
-      const gap = bench.gap * this.dpr;
-
-      // zona de margen real disponible a izquierda/derecha (entre canvas y pitch)
-      const leftX0 = 0;
-      const leftX1 = this.ox; // inicio del pitch
-      const rightX0 = this.ox + CONFIG.world.w * this.scale; // final pitch
-      const rightX1 = this.w;
-
-      // si no hay margen suficiente, aún así pintamos pequeño encima del césped en un borde
-      const leftWidth = Math.max(0, leftX1 - leftX0);
-      const rightWidth = Math.max(0, rightX1 - rightX0);
-
-      const listA = this.game.pegs.filter(p=>!p.active && p.team==='A');
-      const listB = this.game.pegs.filter(p=>!p.active && p.team==='B');
-
-      const drawSide = (team, list, x0, x1) => {
-        if(list.length===0) return;
-
-        const minW = 52*this.dpr;
-        let usableW = Math.max(minW, (x1-x0) - pad*2);
-        const colW = usableW; // usamos todo el ancho del margen
-
-        // radio en pantalla (relativo al normal)
-        const rNormal = CONFIG.peg.r * this.scale;
-        const r = Math.max(6*this.dpr, rNormal * bench.scale);
-
-        // layout en grid vertical con wrap a columnas
-        const step = (2*r + gap);
-        const maxRows = Math.floor((this.h - pad*2) / step);
-        const rows = Math.max(1, maxRows);
-
-        // cuántas columnas necesitamos
-        const cols = Math.ceil(list.length / rows);
-
-        // si el margen es estrecho, hacemos columnas finas
-        const colGap = 8*this.dpr;
-        const neededW = cols*(2*r) + (cols-1)*colGap;
-        const startX = (x0 + x1)/2 - neededW/2;
-
-        // panel sutil
-        ctx.save();
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = 'rgba(0,0,0,.18)';
-        const panelX = Math.min(x0+pad, startX - 10*this.dpr);
-        const panelW = Math.max( (x1-x0)-pad*2, neededW + 20*this.dpr );
-        this.roundRect(panelX, pad, panelW, this.h - pad*2, 14*this.dpr);
-        ctx.fill();
-        ctx.restore();
-
-        // etiqueta “RETIRADOS”
-        ctx.save();
-        ctx.globalAlpha = 0.85;
-        ctx.fillStyle = 'rgba(234,240,255,.75)';
-        ctx.font = `${Math.floor(12*this.dpr)}px system-ui`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(`RETIRADOS ${team}`, (x0+x1)/2, pad + 6*this.dpr);
-        ctx.restore();
-
-        // pegs
-        for(let i=0;i<list.length;i++){
-          const c = Math.floor(i / rows);
-          const rr = i % rows;
-
-          const cx = startX + c*(2*r + colGap) + r;
-          const cy = pad + 28*this.dpr + rr*step + r;
-
-          // sombra ligera
-          this.drawShadowAt(cx, cy, r, 0.22);
-
-          // palito retirado: dimmed + alpha configurada
-          this.drawPegScreen(cx, cy, r, team, true, bench.alpha, false);
-        }
-      };
-
-      // Izquierda: retirados A. Derecha: retirados B.
-      drawSide('A', listA, leftX0, leftX1);
-      drawSide('B', listB, rightX0, rightX1);
-    }
-
     draw(){
       this.resize();
       const ctx=this.ctx;
@@ -778,22 +766,30 @@
       this.drawPitch();
       this.drawGoals();
 
-      // ordenar por y para sensación de profundidad
-      const bodies=[this.game.ball, ...this.game.pegs.filter(p=>p.active)];
+      // Orden por Y para pseudo-3D
+      const bodies=[...this.game.pegs.filter(p=>p.active), this.game.ball];
       bodies.sort((a,b)=>a.p.y-b.p.y);
 
-      for(const b of bodies) this.drawShadow(b);
-
       for(const b of bodies){
-        if(b instanceof Ball) this.drawBall(b);
-        else this.drawPeg(b, this.game.input.selected && this.game.input.selected.id===b.id);
+        if(b instanceof Ball) continue;
+        this.drawPeg(b);
       }
 
-      // ✅ banquillo: palitos retirados visibles
-      this.drawBench();
+      this.drawBall(this.game.ball, this.game.input.ballSelected);
 
+      // Palitos retirados apoyados en el borde
+      this.drawRemovedOnBorders();
+
+      // Aim UI
       this.drawAim(this.game.input);
+
       this.drawVignette();
+
+      if(CONFIG.debug.enabled){
+        const dbg=this.game.ui.dbg;
+        dbg.style.display='block';
+        dbg.textContent=`scale ${this.scale.toFixed(4)} dpr ${this.dpr.toFixed(2)} phase ${this.game.phase}`;
+      }
     }
   }
 
@@ -802,10 +798,11 @@
       this.game=game;
       this.canvas=canvas;
       this.r=renderer;
+
       this.mouse={x:0,y:0};
-      this.aiming=false;
-      this.selected=null;
       this.pointerDown=false;
+      this.aiming=false;
+      this.ballSelected=false;
 
       canvas.addEventListener('pointerdown', (e)=>this.onDown(e));
       window.addEventListener('pointermove', (e)=>this.onMove(e), {passive:true});
@@ -822,16 +819,23 @@
 
     onDown(e){
       if(this.game.phase!=='ready') return;
+      if(!this.game.canShootNow()) return;
+
       this.canvas.setPointerCapture?.(e.pointerId);
       this.pointerDown=true;
       this.mouse=this.pos(e);
 
-      const wpos=this.game.renderer.s2w(this.mouse);
-      const peg=this.game.pickPeg(wpos.x,wpos.y,this.game.turn);
+      // Solo se puede seleccionar la bola
+      const wpos=this.r.s2w(this.mouse);
+      const b=this.game.ball;
+      const d=hypot(wpos.x-b.p.x,wpos.y-b.p.y);
 
-      if(peg){
-        this.selected=peg;
+      if(d<=b.r*1.25){
+        this.ballSelected=true;
         this.aiming=true;
+      }else{
+        this.ballSelected=false;
+        this.aiming=false;
       }
     }
 
@@ -843,27 +847,33 @@
       if(!this.pointerDown) return;
       this.pointerDown=false;
 
-      if(!this.aiming || !this.selected) { this.aiming=false; return; }
+      if(!this.aiming || !this.ballSelected) { this.aiming=false; return; }
       if(this.game.phase!=='ready') { this.aiming=false; return; }
+      if(!this.game.canShootNow()) { this.aiming=false; return; }
 
-      const peg=this.selected;
-      if(!peg.active || peg.team!==this.game.turn){ this.aiming=false; return; }
+      const ball=this.game.ball;
+      const bp=this.r.w2s(ball.p);
 
-      const sp=this.game.renderer.w2s(peg.p);
-      const dx=this.mouse.x-sp.x, dy=this.mouse.y-sp.y;
+      const dx=this.mouse.x-bp.x, dy=this.mouse.y-bp.y;
       const dist=Math.hypot(dx,dy);
-      const maxD=CONFIG.flick.maxDrag*this.game.renderer.dpr;
-      const clamped=Math.min(dist,maxD);
-      const t=clamped/maxD;
 
-      if(clamped>2*this.game.renderer.dpr){
+      const maxD=CONFIG.shot.maxDrag*this.r.dpr;
+      const clamped=Math.min(dist,maxD);
+      const t=clamp(clamped/maxD,0,1);
+
+      if(clamped>3*this.r.dpr){
         const inv=1/(dist||1);
-        const dir={ x:-dx*inv, y:-dy*inv };
-        const impulse=lerp(CONFIG.flick.minImpulse, CONFIG.flick.maxImpulse, t);
-        this.game.flick(peg,dir,impulse);
+        const dir={ x:dx*inv, y:dy*inv }; // dirección EXACTA del arrastre
+        const impulse=lerp(CONFIG.shot.minImpulse, CONFIG.shot.maxImpulse, t);
+        this.game.shootBall(dir,impulse);
       }
 
       this.aiming=false;
+    }
+
+    resetSelection(){
+      this.aiming=false;
+      this.ballSelected=false;
     }
   }
 
@@ -884,14 +894,14 @@
         btnHelp:document.getElementById('help'),
       };
 
-      this.turn='A';
       this.scoreA=0; this.scoreB=0;
+      this.turn = (Math.random()<0.5)?'A':'B'; // ✅ turno inicial aleatorio
       this.phase='ready'; // ready | sim | paused | gameover
       this.winner=null;
 
       this.ball=new Ball(CONFIG.world.w/2, CONFIG.world.h/2);
       this.pegs=[];
-      this.buildTeams();
+      this.buildFixedLayout();
 
       this.physics=new Physics(this);
       this.renderer=new Renderer(this, canvas, shell);
@@ -909,6 +919,9 @@
       this.bindUI();
       this.updateHUD();
 
+      // Colocar bola en esquina del que saca
+      this.placeBallForTurn();
+
       requestAnimationFrame(()=>this.loop());
     }
 
@@ -920,58 +933,75 @@
       document.getElementById('helpBack').addEventListener('click', (e)=>{
         if(e.target.id==='helpBack') document.getElementById('helpBack').classList.remove('show');
       });
-
-      if(CONFIG.debug.enabled) this.ui.dbg.style.display='block';
     }
 
-    buildTeams(){
+    // ✅ Disposición tipo la imagen (hardcode positions)
+    buildFixedLayout(){
       this.pegs=[];
+
       const W=CONFIG.world.w, H=CONFIG.world.h;
 
-      const formation=(team)=>{
-        const baseX=(team==='A')?W*0.22:W*0.78;
-        const side=(team==='A')?-1:1;
-        const spreadY=90;
-        const pts=[];
-        pts.push({ x: baseX + side*170, y: H*0.5 });
-        const rows=[
-          { n:4, x: baseX + side*80,  y: H*0.5, dy: spreadY },
-          { n:4, x: baseX,           y: H*0.5, dy: spreadY },
-          { n:2, x: baseX - side*100,y: H*0.5, dy: spreadY*0.8 },
-        ];
-        for(const row of rows){
-          for(let i=0;i<row.n;i++){
-            const t=(row.n===1)?0:(i/(row.n-1)-0.5);
-            pts.push({ x: row.x, y: row.y + t*row.dy*2 });
-          }
-        }
-        for(const p of pts){ p.x += (Math.random()*2-1)*10; p.y += (Math.random()*2-1)*12; }
-        return pts;
-      };
+      // Coordenadas aproximadas a la foto: 11 por lado
+      // Team A (izquierda, azul)
+      const A = [
+        [90, H*0.50],     // portero
+        [220, H*0.20],
+        [240, H*0.38],
+        [240, H*0.62],
+        [220, H*0.80],
+        [360, H*0.22],
+        [380, H*0.40],
+        [380, H*0.60],
+        [360, H*0.78],
+        [520, H*0.32],
+        [520, H*0.68],
+      ];
 
-      const a=formation('A');
-      const b=formation('B');
+      // Team B (derecha, rojo)
+      const B = [
+        [W-90, H*0.50],   // portero
+        [W-220, H*0.20],
+        [W-240, H*0.38],
+        [W-240, H*0.62],
+        [W-220, H*0.80],
+        [W-360, H*0.22],
+        [W-380, H*0.40],
+        [W-380, H*0.60],
+        [W-360, H*0.78],
+        [W-520, H*0.32],
+        [W-520, H*0.68],
+      ];
 
       for(let i=0;i<CONFIG.teams.count;i++){
-        const p=a[i] || {x:W*0.25, y:H*(0.2+0.6*i/(CONFIG.teams.count-1))};
-        this.pegs.push(new Peg(p.x,p.y,'A',`A${i}`));
+        const p=A[i];
+        this.pegs.push(new Peg(p[0],p[1],'A',`A${i}`));
       }
       for(let i=0;i<CONFIG.teams.count;i++){
-        const p=b[i] || {x:W*0.75, y:H*(0.2+0.6*i/(CONFIG.teams.count-1))};
-        this.pegs.push(new Peg(p.x,p.y,'B',`B${i}`));
+        const p=B[i];
+        this.pegs.push(new Peg(p[0],p[1],'B',`B${i}`));
+      }
+
+      // micro jitter para que no esté matemático
+      for(const p of this.pegs){
+        p.p.x += rand(-6,6);
+        p.p.y += rand(-8,8);
       }
     }
 
     getActiveBodies(){ return [this.ball, ...this.pegs.filter(p=>p.active)]; }
 
-    pickPeg(x,y,team){
-      let best=null, bestD=Infinity;
-      for(const p of this.pegs){
-        if(!p.active || p.team!==team) continue;
-        const d=hypot(x-p.p.x,y-p.p.y);
-        if(d<=p.r && d<bestD){ bestD=d; best=p; }
-      }
-      return best;
+    updateHUD(){
+      this.ui.scoreA.textContent=String(this.scoreA);
+      this.ui.scoreB.textContent=String(this.scoreB);
+      this.ui.turnText.textContent=(this.turn==='A')?'Equipo A':'Equipo B';
+      // A azul, B rojo
+      this.ui.turnPill.style.background=(this.turn==='A')?'#4da3ff':'#ff6b6b';
+      this.ui.btnUndo.disabled = !this.undoSnap || this.phase!=='ready';
+    }
+
+    canShootNow(){
+      // Sólo se puede chutar si la bola está colocada y casi parada
+      return this.phase==='ready' && this.ball.speed() < 0.5;
     }
 
     snapshot(){
@@ -990,7 +1020,6 @@
       this.turn=s.turn;
       this.scoreA=s.scoreA; this.scoreB=s.scoreB;
       this.phase=s.phase; this.winner=s.winner;
-
       this.goalBannerUntil=s.goalBannerUntil||0;
       this.pauseUntil=s.pauseUntil||0;
 
@@ -1007,9 +1036,7 @@
         p.v.x=sp.v.x; p.v.y=sp.v.y;
       }
 
-      this.input.selected=null;
-      this.input.aiming=false;
-
+      this.input.resetSelection();
       this.updateHUD();
     }
 
@@ -1022,42 +1049,55 @@
     }
 
     reset(){
-      this.turn='A';
       this.scoreA=0; this.scoreB=0;
+      this.turn = (Math.random()<0.5)?'A':'B';
       this.phase='ready';
       this.winner=null;
 
       this.ball.p.x=CONFIG.world.w/2; this.ball.p.y=CONFIG.world.h/2;
       this.ball.v.x=0; this.ball.v.y=0; this.ball.active=true;
 
-      this.buildTeams();
+      this.buildFixedLayout();
       this.undoSnap=null;
-
       this.goalBannerUntil=0;
       this.pauseUntil=0;
 
-      this.input.selected=null;
-      this.input.aiming=false;
+      this.input.resetSelection();
 
+      this.placeBallForTurn();
       this.updateHUD();
     }
 
-    updateHUD(){
-      this.ui.scoreA.textContent=String(this.scoreA);
-      this.ui.scoreB.textContent=String(this.scoreB);
-      this.ui.turnText.textContent=(this.turn==='A')?'Equipo A':'Equipo B';
-      this.ui.turnPill.style.background=(this.turn==='A')?'#ff6b6b':'#4da3ff';
-      this.ui.btnUndo.disabled = !this.undoSnap || this.phase!=='ready';
+    // ✅ Saque desde esquina del campo del que tira
+    placeBallForTurn(){
+      const W=CONFIG.world.w, H=CONFIG.world.h;
+      const margin = 52; // dentro del campo
+      const topCorner = { y: margin };
+      const botCorner = { y: H - margin };
+
+      const chooseTop = Math.random() < 0.5;
+
+      if(this.turn==='A'){
+        this.ball.p.x = margin;
+        this.ball.p.y = chooseTop ? topCorner.y : botCorner.y;
+      }else{
+        this.ball.p.x = W - margin;
+        this.ball.p.y = chooseTop ? topCorner.y : botCorner.y;
+      }
+
+      this.ball.v.x=0; this.ball.v.y=0;
     }
 
-    flick(peg,dir,impulse){
+    shootBall(dir, impulse){
       if(this.phase!=='ready') return;
-      if(!peg.active || peg.team!==this.turn) return;
+      if(!this.canShootNow()) return;
 
+      // Snapshot para undo justo antes del tiro
       this.undoSnap=this.snapshot();
 
-      peg.v.x += dir.x * impulse / peg.mass;
-      peg.v.y += dir.y * impulse / peg.mass;
+      // Impulso a la bola
+      this.ball.v.x += dir.x * (impulse / this.ball.mass);
+      this.ball.v.y += dir.y * (impulse / this.ball.mass);
 
       this.phase='sim';
       this.simStartMs=nowMs();
@@ -1079,11 +1119,9 @@
 
       const inMouth = (b.p.y>=yTop && b.p.y<=yBot);
 
-      if(inMouth && (b.p.x + b.r < 0)) return { side:'left', scorer:'B', conceded:'A' };
-      if(inMouth && (b.p.x - b.r > W)) return { side:'right', scorer:'A', conceded:'B' };
-
-      if(b.p.y-b.r<0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*CONFIG.physics.wallRestitution; }
-      if(b.p.y+b.r>H){ b.p.y=H-b.r; b.v.y=-Math.abs(b.v.y)*CONFIG.physics.wallRestitution; }
+      // Gol: la bola ha entrado completamente (centro +/- radio)
+      if(inMouth && (b.p.x + b.r < 0)) return { scorer:'B', conceded:'A' };
+      if(inMouth && (b.p.x - b.r > W)) return { scorer:'A', conceded:'B' };
 
       return null;
     }
@@ -1092,12 +1130,12 @@
       const candidates=this.pegs.filter(p=>p.active && p.team===team);
       if(!candidates.length) return;
 
-      let best=candidates[0], bestScore=-Infinity;
+      // Quitar uno de manera "natural": el más cercano a su portería (como perder un jugador atrás)
+      const targetX = (team==='A') ? 0 : CONFIG.world.w;
+      let best=candidates[0], bestScore=Infinity;
       for(const p of candidates){
-        const dBall=hypot(p.p.x-this.ball.p.x, p.p.y-this.ball.p.y);
-        const dCenter=hypot(p.p.x-CONFIG.world.w/2, p.p.y-CONFIG.world.h/2);
-        const score=dBall*0.6 + dCenter*0.4;
-        if(score>bestScore){ bestScore=score; best=p; }
+        const score = Math.abs(p.p.x - targetX) * 1.0 + Math.abs(p.p.y - CONFIG.world.h/2) * 0.15;
+        if(score < bestScore){ bestScore=score; best=p; }
       }
       best.active=false;
       best.v.x=best.v.y=0;
@@ -1107,29 +1145,32 @@
       if(this.phase==='gameover') return;
 
       if(g.scorer==='A') this.scoreA++; else this.scoreB++;
+
+      // ✅ Al meter gol, se quita un palito del equipo que encaja (rival del que marca)
       this.removeOnePeg(g.conceded);
 
+      // Efecto GOOL
       this.goalBannerUntil=nowMs()+CONFIG.effects.goalBannerMs;
       document.getElementById('goalBanner').classList.add('show');
 
+      // Victoria
       if(this.scoreA>=11 || this.scoreB>=11){
         this.phase='gameover';
         this.winner=(this.scoreA>=11)?'A':'B';
+      }else{
+        // Pausa breve y siguiente turno
+        this.pauseUntil=nowMs()+CONFIG.effects.goalPauseMs;
+        this.phase='paused';
       }
 
-      this.pauseUntil=nowMs()+CONFIG.effects.goalPauseMs;
-      this.phase = (this.phase==='gameover') ? 'gameover' : 'paused';
-
+      // Parar todo
       for(const b of this.getActiveBodies()){ b.v.x=0; b.v.y=0; }
 
-      this.ball.p.x=CONFIG.world.w/2;
-      this.ball.p.y=CONFIG.world.h/2;
-
+      // Turno cambia y coloca bola en su esquina (nuevo saque)
       this.turn = (this.turn==='A')?'B':'A';
+      this.placeBallForTurn();
 
-      this.input.selected=null;
-      this.input.aiming=false;
-
+      this.input.resetSelection();
       this.updateHUD();
     }
 
@@ -1140,6 +1181,7 @@
       ctx.save();
       ctx.fillStyle='rgba(0,0,0,.35)';
       ctx.fillRect(0,0,w,h);
+
       const text=(this.winner==='A')?'¡GANA EQUIPO A!':'¡GANA EQUIPO B!';
       ctx.font=`1000 ${Math.floor(54*dpr)}px system-ui`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -1148,9 +1190,11 @@
       ctx.shadowBlur=18*dpr;
       ctx.fillText(text,w/2,h/2-22*dpr);
       ctx.shadowBlur=0;
+
       ctx.font=`800 ${Math.floor(16*dpr)}px system-ui`;
       ctx.fillStyle='rgba(234,240,255,.85)';
       ctx.fillText('Pulsa “Reiniciar partido” para jugar otra vez.',w/2,h/2+28*dpr);
+
       ctx.restore();
     }
 
@@ -1160,17 +1204,15 @@
       this.last=t;
       this.acc += dtFrame;
 
+      // Hide GOOL banner
       if(t>=this.goalBannerUntil){
         document.getElementById('goalBanner').classList.remove('show');
       }
 
-      if(this.phase==='paused'){
-        if(t>=this.pauseUntil){
-          if(this.phase!=='gameover'){
-            this.phase='ready';
-            this.updateHUD();
-          }
-        }
+      // Pause after goal
+      if(this.phase==='paused' && t>=this.pauseUntil){
+        this.phase='ready';
+        this.updateHUD();
       }
 
       if(this.phase==='sim'){
@@ -1190,33 +1232,34 @@
           if(this.allStopped() || elapsed>=CONFIG.physics.maxSimSeconds){
             for(const b of this.getActiveBodies()){ b.v.x=0; b.v.y=0; }
             this.phase='ready';
+
+            // ✅ fin del turno: cambia el turno y recoloca bola en esquina del que saca
             this.turn=(this.turn==='A')?'B':'A';
+            this.placeBallForTurn();
+
+            this.input.resetSelection();
             this.updateHUD();
           }
         }
       }
 
+      // Render
       this.renderer.draw();
 
       if(this.phase==='gameover'){
         this.drawGameOverOverlay();
       }
 
-      if(CONFIG.debug.enabled){
-        const fps=1000/Math.max(1,(t-(this._prevT||t)));
-        this._prevT=t;
-        this.ui.dbg.textContent=
-          `canvas ${this.renderer.w}×${this.renderer.h} dpr ${this.renderer.dpr.toFixed(2)} | scale ${this.renderer.scale.toFixed(4)} | fps≈${fps.toFixed(0)} | phase ${this.phase}`;
-      }
-
       requestAnimationFrame(()=>this.loop());
     }
   }
 
+  // Init
   const canvas=document.getElementById('c');
   const shell=document.getElementById('shell');
   const game=new Game(canvas,shell);
 
+  // Help modal close on ESC
   window.addEventListener('keydown', (e)=>{
     if(e.key==='Escape') document.getElementById('helpBack').classList.remove('show');
   });
@@ -1228,24 +1271,23 @@
 ============================================================
 CÓMO JUGAR
 ============================================================
-- Turnos alternos: Equipo A y Equipo B.
-- En tu turno: click sobre un palito de tu equipo.
-- Arrastra para apuntar y definir potencia; suelta para chutar.
-- El turno termina cuando todo se detiene, hay gol o se alcanza tiempo máximo.
+- Turnos alternos A/B.
+- Cada turno es un SAQUE: la bola se coloca en una esquina del campo del equipo que tira.
+- Para chutar: selecciona la bola y arrastra en la dirección exacta del tiro.
+  La potencia depende de la distancia del arrastre (limitada).
+- Los palitos de ambos equipos estorban (incluido tu propio equipo).
 - Gol: la bola entra completamente en la portería rival.
-  El equipo que encaja NO desaparece: su palito pasa al banquillo (margen lateral).
+- Al gol: se quita 1 palito del equipo que encaja y se deja apoyado en el borde (visible).
 - Gana quien llegue a 11.
 
 ============================================================
 PARÁMETROS RECOMENDADOS PARA AJUSTAR (CONFIG)
 ============================================================
-- CONFIG.flick.maxImpulse / maxDrag: fuerza y recorrido del tiro.
-- CONFIG.ball.damp / CONFIG.peg.damp: fricción.
-- CONFIG.physics.wallRestitution: rebote.
-- CONFIG.physics.stopSpeed: umbral de parada.
-- CONFIG.goal.opening: tamaño boca portería.
-- CONFIG.render.bench.scale/alpha: tamaño y “apagado” de palitos retirados.
-- CONFIG.debug.enabled: debug on/off.
+- CONFIG.shot.maxImpulse / maxDrag: fuerza y recorrido del tiro.
+- CONFIG.ball.damp / CONFIG.peg.damp: fricción (más bajo = se para antes).
+- CONFIG.physics.solverIterations: estabilidad colisiones.
+- CONFIG.goal.opening: tamaño de la boca.
+- CONFIG.render.removed.scale/alpha: tamaño y aspecto de palitos retirados.
 -->
 </body>
 </html>
