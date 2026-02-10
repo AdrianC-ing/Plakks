@@ -51,7 +51,6 @@
       display:flex;flex-direction:column;
     }
 
-    /* Barra inferior FUERA del canvas para que no tape el campo */
     .bottomBar{
       display:flex;align-items:flex-end;gap:10px;
       padding:10px 10px 10px;
@@ -94,18 +93,24 @@
     .modal ul{margin:8px 0 0 18px}
     .modal .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;padding:0;border:0;background:none;box-shadow:none}
 
+    /* ✅ Overlay NO bloqueante: deja pasar toques al canvas.
+       Solo el panel recibe interacción (pointer-events:auto). */
     .overlay{
-      position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:20;
-      background:rgba(0,0,0,.45);
-      backdrop-filter: blur(4px);
+      position:absolute;inset:0;display:none;align-items:flex-start;justify-content:center;
+      z-index:20;
+      pointer-events:none;              /* <- clave */
+      padding:12px;
     }
     .overlay.show{display:flex}
+
     .panel{
+      pointer-events:auto;              /* <- solo el panel captura clics */
       width:min(560px,calc(100% - 24px));
       border-radius:16px;border:1px solid rgba(255,255,255,.14);
       background:rgba(15,26,47,.94);
       box-shadow:0 26px 90px rgba(0,0,0,.55);
       padding:14px;
+      backdrop-filter: blur(4px);
     }
     .panel h3{margin:0 0 6px;font-size:15px}
     .panel p{margin:0 0 12px;font-size:13px;line-height:1.4;color:rgba(234,240,255,.82)}
@@ -113,7 +118,6 @@
     .choiceRow button{flex:1;min-width:150px}
     .hint{margin-top:10px;font-size:12px;color:rgba(234,240,255,.70)}
 
-    /* Mensaje de controles: colapsable */
     .hintCard{
       flex:1;
       padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.26);
@@ -150,8 +154,8 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <div class="title">PLAKKS-like Flick Soccer <span class="badge">UI sin tapar campo</span></div>
-      <div class="sub">El mensaje de controles ya no pisa el césped: va en una barra inferior colapsable</div>
+      <div class="title">PLAKKS-like Flick Soccer <span class="badge">overlay no bloquea</span></div>
+      <div class="sub">Ahora el mensaje de “Retirar palito” no impide tocar el campo</div>
     </div>
     <div class="hud">
       <div class="score" aria-label="Marcador">
@@ -175,16 +179,14 @@
       <canvas id="c"></canvas>
       <div class="goalBanner" id="goalBanner"><div class="goalText">GOOOL</div></div>
 
-      <!-- Overlay: elegir palito a retirar -->
       <div class="overlay" id="removeOverlay">
         <div class="panel">
           <h3 id="removeTitle">Elige el palito a retirar</h3>
           <p id="removeDesc">Te han metido gol. Toca uno de tus palitos para retirarlo (quedará tumbado fuera del campo).</p>
-          <div class="hint">Consejo: el palito seleccionado se resaltará. Luego elegirás la esquina de saque.</div>
+          <div class="hint">Ahora puedes tocar palitos aunque este panel esté visible (no bloquea el campo).</div>
         </div>
       </div>
 
-      <!-- Overlay: elegir esquina de saque -->
       <div class="overlay" id="cornerOverlay">
         <div class="panel">
           <h3 id="cornerTitle">Elige esquina para sacar</h3>
@@ -198,7 +200,6 @@
       </div>
     </div>
 
-    <!-- ✅ Barra inferior (no tapa el canvas) -->
     <div class="bottomBar" id="bottomBar">
       <div class="hintCard" id="hintCard" role="button" tabindex="0" aria-expanded="true" title="Toca para plegar/desplegar">
         <div class="hintHead">
@@ -209,7 +210,7 @@
           <div><b>Chute:</b> toca la bola → arrastra <b>hacia atrás</b> → suelta.</div>
           <div><b>Tras gol:</b> el equipo que encaja elige qué palito retirar, luego elige esquina para sacar.</div>
           <div style="margin-top:6px;opacity:.85">
-            Tip móvil: si quieres más campo visible, toca aquí para <span class="kbd">plegar</span>.
+            Tip móvil: toca aquí para <span class="kbd">plegar</span>.
           </div>
         </div>
       </div>
@@ -336,7 +337,7 @@
       this.team=team;
       this.id=id;
       this.active=true;
-      this.removedPose=null; // {x,y,angle} en mundo
+      this.removedPose=null;
     }
   }
 
@@ -819,7 +820,6 @@
       ctx.fillStyle=`rgba(125,211,252,${0.25+0.60*t})`;
       ctx.fill();
 
-      // barra potencia dentro del canvas (pequeña) - NO tapa porque está en el borde inferior del canvas
       const bw=190*this.dpr, bh=10*this.dpr;
       const bx=this.ox+14*this.dpr, by=this.oy+(CONFIG.world.h*this.scale)-20*this.dpr;
       ctx.shadowBlur=0;
@@ -1060,7 +1060,6 @@
       document.getElementById('cornerTop').addEventListener('click', ()=>this.chooseCorner('top'));
       document.getElementById('cornerBottom').addEventListener('click', ()=>this.chooseCorner('bottom'));
 
-      // ✅ hint colapsable (nunca tapa el campo porque está fuera del canvas)
       const hint = document.getElementById('hintCard');
       const toggle = () => {
         hint.classList.toggle('compact');
@@ -1071,7 +1070,6 @@
       hint.addEventListener('click', toggle);
       hint.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' ') { e.preventDefault(); toggle(); }});
 
-      // Auto-compact si la altura útil es pequeña
       const autoCompact = () => {
         const small = window.innerHeight < 680;
         hint.classList.toggle('compact', small);
@@ -1121,9 +1119,7 @@
       document.getElementById('undo').disabled = !this.undoSnap || this.phase!=='ready';
     }
 
-    canShootNow(){
-      return this.phase==='ready' && this.ball.speed()<0.5;
-    }
+    canShootNow(){ return this.phase==='ready' && this.ball.speed()<0.5; }
 
     snapshot(){
       return {
@@ -1383,17 +1379,6 @@
         }
       }
 
-      // hover highlight en elección de retiro
-      if(this.phase==='chooseRemoval'){
-        const team=this.pendingRemovalTeam;
-        let hover=null;
-        // hoverPegId se actualiza por Input.onMove, aquí dejamos fallback si no hay move (touch)
-        if(!this.hoverPegId){
-          // no hacemos nada
-        }else hover=this.hoverPegId;
-        this.hoverPegId=hover;
-      }
-
       this.renderer.draw();
       if(this.phase==='gameover') this.drawGameOverOverlay();
 
@@ -1417,17 +1402,12 @@
 </script>
 
 <!--
-============================================================
-CÓMO JUGAR
-============================================================
-- El mensaje de controles está en una barra inferior fuera del canvas (no tapa el campo).
-- Puedes plegarlo tocándolo, y en pantallas bajas se pliega automáticamente.
+Cómo jugar:
+- Tras gol aparece un panel informativo, pero el campo sigue siendo clicable.
+- Toca un palito del equipo que encajó para retirarlo.
 
-============================================================
-PARÁMETROS PARA AJUSTAR
-============================================================
-- Auto-compact: window.innerHeight < 680 (en bindUI → autoCompact()).
-- Si quieres aún más campo en móvil: reduce padding de .bottomBar o el contenido de #hintBody.
+Parámetros:
+- Si quieres que el panel moleste aún menos: en .overlay usa padding más pequeño o reduce width de .panel.
 -->
 </body>
 </html>
