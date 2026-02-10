@@ -18,9 +18,19 @@
       --shadow: rgba(0,0,0,.35);
     }
     *{ box-sizing:border-box; }
-    html,body{ height:100%; margin:0; background: radial-gradient(1200px 800px at 30% 10%, #13214a 0%, #0b1220 55%, #060a14 100%); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; }
+
+    /* ✅ CLAVE: height real para que flex calcule alturas correctamente */
+    html,body{
+      height:100%;
+      margin:0;
+      background: radial-gradient(1200px 800px at 30% 10%, #13214a 0%, #0b1220 55%, #060a14 100%);
+      color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
     .wrap{
-      min-height:100%;
+      /* ✅ CLAVE: height (no solo min-height) */
+      height:100%;
       display:flex;
       flex-direction:column;
       gap:10px;
@@ -28,6 +38,7 @@
       max-width:1200px;
       margin:0 auto;
     }
+
     header{
       display:flex;
       align-items:center;
@@ -39,6 +50,7 @@
       border-radius:14px;
       box-shadow: 0 12px 30px rgba(0,0,0,.25);
       backdrop-filter: blur(6px);
+      flex: 0 0 auto;
     }
     .leftHeader{ display:flex; flex-direction:column; gap:4px; }
     .title{
@@ -141,26 +153,36 @@
 
     .stage{
       position:relative;
-      flex:1;
+      flex:1 1 auto;
       display:flex;
       flex-direction:column;
       gap:10px;
+      min-height: 260px;
     }
+
     .canvasShell{
       position:relative;
-      flex:1;
+      flex:1 1 auto;
       border-radius:16px;
       border:1px solid rgba(255,255,255,.10);
       background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
       box-shadow: 0 18px 42px rgba(0,0,0,.32);
       overflow:hidden;
+
+      /* ✅ CLAVE: asegura altura real aunque el navegador "colapse" el flex */
+      min-height: 520px;
     }
+
+    /* ✅ CLAVE: canvas absolute para rellenar TODO el contenedor */
     canvas{
+      position:absolute;
+      inset:0;
       width:100%;
       height:100%;
       display:block;
       background: transparent;
     }
+
     .overlayNote{
       position:absolute;
       left:12px; bottom:10px;
@@ -173,6 +195,7 @@
       backdrop-filter: blur(6px);
       box-shadow: 0 10px 24px rgba(0,0,0,.22);
       max-width:min(420px, calc(100% - 24px));
+      z-index: 5;
     }
     .overlayNote b{ color:#ffffff; }
 
@@ -185,6 +208,7 @@
       pointer-events:none;
       opacity:0;
       transition: opacity .2s ease;
+      z-index: 6;
     }
     .goalBanner.show{ opacity:1; }
     .goalText{
@@ -202,7 +226,6 @@
     }
     .goalBanner.show .goalText{ transform: translateY(0) scale(1); }
 
-    /* Help modal */
     .modalBack{
       position:fixed;
       inset:0;
@@ -235,13 +258,13 @@
       padding:9px 12px;
     }
 
-    /* Small screens */
     @media (max-width: 720px){
       header{ flex-direction:column; align-items:stretch; }
       .hud{ justify-content:space-between; }
       .score{ min-width: unset; flex:1; }
       .btnRow{ justify-content:space-between; }
       button{ flex:1; }
+      .canvasShell{ min-height: 62vh; }
     }
   </style>
 </head>
@@ -322,103 +345,29 @@
    CONFIG (tweak here)
 ========================= */
 const CONFIG = {
-  // World dimensions (logical units)
-  world: {
-    w: 1200,
-    h: 720,
-    wallThickness: 30, // visual only (collision uses bounds)
-  },
-
-  // Goals (at left and right)
-  goal: {
-    opening: 220,     // height of goal mouth
-    depth: 42,        // pseudo-3D depth (render only)
-    postRadius: 10,
-    netAlpha: 0.25,
-  },
-
-  // Entities
-  ball: {
-    r: 16,
-    mass: 1.0,
-    restitution: 0.92,
-    linearDamp: 0.995, // per physics step
-    maxSpeed: 2400,
-  },
-  peg: {
-    r: 24,            // disc radius (cylinder top)
-    mass: 3.0,
-    restitution: 0.65,
-    linearDamp: 0.992,
-    maxSpeed: 2200,
-  },
-
-  // Gameplay
-  teams: {
-    count: 11
-  },
-
-  // Flick mechanic
-  flick: {
-    maxDrag: 160,          // max pixels in screen-space (converted to world using scale)
-    maxImpulse: 1800,      // world impulse scale
-    minImpulse: 120,       // avoid ultra tiny taps
-    aimLineWidth: 3,
-  },
-
-  // Physics
+  world: { w: 1200, h: 720, wallThickness: 30 },
+  goal: { opening: 220, depth: 42, postRadius: 10, netAlpha: 0.25 },
+  ball: { r: 16, mass: 1.0, restitution: 0.92, linearDamp: 0.995, maxSpeed: 2400 },
+  peg: { r: 24, mass: 3.0, restitution: 0.65, linearDamp: 0.992, maxSpeed: 2200 },
+  teams: { count: 11 },
+  flick: { maxDrag: 160, maxImpulse: 1800, minImpulse: 120, aimLineWidth: 3 },
   physics: {
-    dt: 1/120,                 // fixed timestep
-    maxSubStepsPerFrame: 10,    // stability when tab stutters
-    solverIterations: 4,        // multiple passes for multiple collisions
-    wallRestitution: 0.86,
-    stopSpeed: 16,             // if all below -> stop
-    sleepTimeMax: 4.0,         // seconds cap after flick
-    penetrationSlop: 0.02,
-    penetrationPercent: 0.9,
+    dt: 1/120, maxSubStepsPerFrame: 10, solverIterations: 4,
+    wallRestitution: 0.86, stopSpeed: 16, sleepTimeMax: 4.0,
+    penetrationSlop: 0.02, penetrationPercent: 0.9,
   },
-
-  // Visual
-  render: {
-    vignette: true,
-    shadowOffset: { x: 10, y: 14 },
-    shadowBlur: 16,
-    pitchMargin: 28,        // inside canvas padding
-    grassNoise: 0.06,       // subtle noise strength
-    pitchCornerR: 38,
-  },
-
-  // Effects
-  effects: {
-    goalBannerMs: 850,
-    goalPauseMs: 500,
-    goalRippleMs: 520,
-    goalFlashAlpha: 0.25,
-  },
-
-  // Optional sound (WebAudio)
-  sound: {
-    enabled: true,
-    goalVolume: 0.12,
-  }
+  render: { vignette: true, shadowOffset: { x: 10, y: 14 }, shadowBlur: 16, pitchMargin: 28, grassNoise: 0.06, pitchCornerR: 38 },
+  effects: { goalBannerMs: 850, goalPauseMs: 500, goalRippleMs: 520, goalFlashAlpha: 0.25 },
+  sound: { enabled: true, goalVolume: 0.12 }
 };
 
-/* =========================
-   Small utilities
-========================= */
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const len = (x, y) => Math.hypot(x, y);
 const lerp = (a, b, t) => a + (b - a) * t;
 const nowMs = () => performance.now();
+function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
 
-function deepClone(obj){
-  return JSON.parse(JSON.stringify(obj));
-}
-
-/* =========================
-   Vector helpers (simple)
-========================= */
-class Vec2 {
+class Vec2{
   constructor(x=0,y=0){ this.x=x; this.y=y; }
   clone(){ return new Vec2(this.x,this.y); }
   add(v){ this.x+=v.x; this.y+=v.y; return this; }
@@ -426,88 +375,47 @@ class Vec2 {
   mul(s){ this.x*=s; this.y*=s; return this; }
   dot(v){ return this.x*v.x + this.y*v.y; }
   mag(){ return Math.hypot(this.x,this.y); }
-  norm(){
-    const m = this.mag();
-    if(m>1e-8){ this.x/=m; this.y/=m; }
-    return this;
-  }
-  static add(a,b){ return new Vec2(a.x+b.x, a.y+b.y); }
+  norm(){ const m=this.mag(); if(m>1e-8){ this.x/=m; this.y/=m; } return this; }
   static sub(a,b){ return new Vec2(a.x-b.x, a.y-b.y); }
   static mul(a,s){ return new Vec2(a.x*s, a.y*s); }
 }
 
-/* =========================
-   Entities
-========================= */
-class Body {
+class Body{
   constructor(x,y,r,mass){
-    this.p = new Vec2(x,y);
-    this.v = new Vec2(0,0);
-    this.r = r;
-    this.mass = mass;
-    this.invMass = mass > 0 ? 1/mass : 0;
-    this.restitution = 0.8;
-    this.damp = 0.995;
-    this.maxSpeed = 2000;
-    this.active = true; // removed pegs become inactive
+    this.p=new Vec2(x,y); this.v=new Vec2(0,0);
+    this.r=r; this.mass=mass; this.invMass=mass>0?1/mass:0;
+    this.restitution=0.8; this.damp=0.995; this.maxSpeed=2000;
+    this.active=true;
   }
   speed(){ return this.v.mag(); }
 }
-
-class Ball extends Body {
-  constructor(x,y){
-    super(x,y,CONFIG.ball.r,CONFIG.ball.mass);
-    this.restitution = CONFIG.ball.restitution;
-    this.damp = CONFIG.ball.linearDamp;
-    this.maxSpeed = CONFIG.ball.maxSpeed;
+class Ball extends Body{
+  constructor(x,y){ super(x,y,CONFIG.ball.r,CONFIG.ball.mass);
+    this.restitution=CONFIG.ball.restitution; this.damp=CONFIG.ball.linearDamp; this.maxSpeed=CONFIG.ball.maxSpeed;
+  }
+}
+class Peg extends Body{
+  constructor(x,y,team,id){ super(x,y,CONFIG.peg.r,CONFIG.peg.mass);
+    this.team=team; this.id=id;
+    this.restitution=CONFIG.peg.restitution; this.damp=CONFIG.peg.linearDamp; this.maxSpeed=CONFIG.peg.maxSpeed;
+    this.spinHint=(Math.random()*2-1)*0.35;
   }
 }
 
-class Peg extends Body {
-  constructor(x,y,team,id){
-    super(x,y,CONFIG.peg.r,CONFIG.peg.mass);
-    this.team = team; // "A" or "B"
-    this.id = id;
-    this.restitution = CONFIG.peg.restitution;
-    this.damp = CONFIG.peg.linearDamp;
-    this.maxSpeed = CONFIG.peg.maxSpeed;
-
-    // For subtle pseudo-3D styling
-    this.spinHint = (Math.random()*2-1) * 0.35;
-  }
-}
-
-/* =========================
-   Physics Engine (2D circles)
-========================= */
-class Physics {
-  constructor(game){
-    this.game = game;
-  }
-
+class Physics{
+  constructor(game){ this.game=game; }
   step(dt){
-    const { world } = CONFIG;
-    const bodies = this.game.getActiveBodies();
+    const {world}=CONFIG;
+    const bodies=this.game.getActiveBodies();
 
-    // Integrate
     for(const b of bodies){
-      b.p.x += b.v.x * dt;
-      b.p.y += b.v.y * dt;
-
-      // Damping (friction/air resistance)
+      b.p.x += b.v.x*dt; b.p.y += b.v.y*dt;
       b.v.mul(b.damp);
-
-      // Clamp speed
-      const s = b.speed();
-      if(s > b.maxSpeed){
-        b.v.mul(b.maxSpeed / (s+1e-9));
-      }
-
-      // Wall collisions (axis-aligned)
+      const s=b.speed();
+      if(s>b.maxSpeed) b.v.mul(b.maxSpeed/(s+1e-9));
       this.resolveWalls(b, world.w, world.h);
     }
 
-    // Solve collisions multiple times to reduce overlaps
     for(let it=0; it<CONFIG.physics.solverIterations; it++){
       for(let i=0;i<bodies.length;i++){
         for(let j=i+1;j<bodies.length;j++){
@@ -516,164 +424,113 @@ class Physics {
       }
     }
   }
-
-  resolveWalls(b, W, H){
-    const e = CONFIG.physics.wallRestitution;
-    // left/right
-    if(b.p.x - b.r < 0){
-      b.p.x = b.r;
-      b.v.x = Math.abs(b.v.x) * e;
-    }
-    if(b.p.x + b.r > W){
-      b.p.x = W - b.r;
-      b.v.x = -Math.abs(b.v.x) * e;
-    }
-    // top/bottom
-    if(b.p.y - b.r < 0){
-      b.p.y = b.r;
-      b.v.y = Math.abs(b.v.y) * e;
-    }
-    if(b.p.y + b.r > H){
-      b.p.y = H - b.r;
-      b.v.y = -Math.abs(b.v.y) * e;
-    }
+  resolveWalls(b,W,H){
+    const e=CONFIG.physics.wallRestitution;
+    if(b.p.x-b.r<0){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e; }
+    if(b.p.x+b.r>W){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e; }
+    if(b.p.y-b.r<0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*e; }
+    if(b.p.y+b.r>H){ b.p.y=H-b.r; b.v.y=-Math.abs(b.v.y)*e; }
   }
+  resolveCircleCollision(a,b){
+    if(!a.active||!b.active) return;
+    const n=Vec2.sub(b.p,a.p);
+    let dist=n.mag();
+    const r=a.r+b.r;
+    if(dist<=0) dist=0.0001;
 
-  resolveCircleCollision(a, b){
-    if(!a.active || !b.active) return;
+    if(dist<r){
+      const penetration=r-dist;
+      const normal=n.mul(1/dist);
+      const invMassSum=a.invMass+b.invMass;
+      if(invMassSum<=0) return;
 
-    const n = Vec2.sub(b.p, a.p);
-    let dist = n.mag();
-    const r = a.r + b.r;
+      const slop=CONFIG.physics.penetrationSlop;
+      const percent=CONFIG.physics.penetrationPercent;
+      const correctionMag=Math.max(penetration-slop,0)/invMassSum*percent;
 
-    if(dist <= 0) dist = 0.0001;
+      a.p.x -= normal.x*correctionMag*a.invMass;
+      a.p.y -= normal.y*correctionMag*a.invMass;
+      b.p.x += normal.x*correctionMag*b.invMass;
+      b.p.y += normal.y*correctionMag*b.invMass;
 
-    if(dist < r){
-      // Penetration correction
-      const penetration = r - dist;
-      const normal = n.mul(1/dist); // normalize in-place
-      const invMassSum = a.invMass + b.invMass;
-      if(invMassSum <= 0) return;
+      const rv=new Vec2(b.v.x-a.v.x, b.v.y-a.v.y);
+      const velAlongNormal=rv.dot(normal);
 
-      const slop = CONFIG.physics.penetrationSlop;
-      const percent = CONFIG.physics.penetrationPercent;
-      const correctionMag = Math.max(penetration - slop, 0) / invMassSum * percent;
+      if(velAlongNormal<0){
+        const e=Math.min(a.restitution,b.restitution);
+        let j=-(1+e)*velAlongNormal;
+        j/=invMassSum;
+        const impulse=Vec2.mul(normal,j);
 
-      a.p.x -= normal.x * correctionMag * a.invMass;
-      a.p.y -= normal.y * correctionMag * a.invMass;
-      b.p.x += normal.x * correctionMag * b.invMass;
-      b.p.y += normal.y * correctionMag * b.invMass;
+        a.v.x -= impulse.x*a.invMass; a.v.y -= impulse.y*a.invMass;
+        b.v.x += impulse.x*b.invMass; b.v.y += impulse.y*b.invMass;
 
-      // Relative velocity
-      const rv = Vec2.sub(b.v, a.v);
-      const velAlongNormal = rv.dot(normal);
-
-      // Only resolve if moving toward each other
-      if(velAlongNormal < 0){
-        const e = Math.min(a.restitution, b.restitution);
-        let j = -(1 + e) * velAlongNormal;
-        j /= invMassSum;
-
-        const impulse = Vec2.mul(normal, j);
-        a.v.x -= impulse.x * a.invMass;
-        a.v.y -= impulse.y * a.invMass;
-        b.v.x += impulse.x * b.invMass;
-        b.v.y += impulse.y * b.invMass;
-
-        // Tangential damping (very light) to help settle and avoid jitter
-        const tangent = new Vec2(rv.x - velAlongNormal * normal.x, rv.y - velAlongNormal * normal.y);
-        const tmag = tangent.mag();
-        if(tmag > 1e-6){
+        const tangent=new Vec2(rv.x-velAlongNormal*normal.x, rv.y-velAlongNormal*normal.y);
+        const tmag=tangent.mag();
+        if(tmag>1e-6){
           tangent.mul(1/tmag);
-          const jt = -rv.dot(tangent) * 0.03; // small friction
-          const tImpulse = Vec2.mul(tangent, jt);
-          a.v.x -= tImpulse.x * a.invMass;
-          a.v.y -= tImpulse.y * a.invMass;
-          b.v.x += tImpulse.x * b.invMass;
-          b.v.y += tImpulse.y * b.invMass;
+          const jt=-rv.dot(tangent)*0.03;
+          const tImpulse=Vec2.mul(tangent,jt);
+          a.v.x -= tImpulse.x*a.invMass; a.v.y -= tImpulse.y*a.invMass;
+          b.v.x += tImpulse.x*b.invMass; b.v.y += tImpulse.y*b.invMass;
         }
       }
     }
   }
 }
 
-/* =========================
-   Renderer (pseudo-3D)
-========================= */
-class Renderer {
-  constructor(game, canvas){
-    this.game = game;
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
-
-    // Precompute subtle grass noise pattern (procedural)
-    this.noiseCanvas = document.createElement('canvas');
-    this.noiseCanvas.width = 256;
-    this.noiseCanvas.height = 256;
-    this.noiseCtx = this.noiseCanvas.getContext('2d');
+class Renderer{
+  constructor(game,canvas){
+    this.game=game; this.canvas=canvas; this.ctx=canvas.getContext('2d');
+    this.noiseCanvas=document.createElement('canvas');
+    this.noiseCanvas.width=256; this.noiseCanvas.height=256;
+    this.noiseCtx=this.noiseCanvas.getContext('2d');
     this.buildNoise();
-
-    this._lastW = 0;
-    this._lastH = 0;
-    this.scale = 1;
-    this.offset = new Vec2(0,0);
+    this._lastW=0; this._lastH=0;
+    this.scale=1; this.offset=new Vec2(0,0);
   }
 
   buildNoise(){
-    const { noiseCtx:ctx } = this;
-    const img = ctx.createImageData(256,256);
+    const ctx=this.noiseCtx;
+    const img=ctx.createImageData(256,256);
     for(let i=0;i<img.data.length;i+=4){
-      const n = (Math.random()*2-1) * 255;
-      img.data[i]   = 0;
-      img.data[i+1] = 120 + n*0.08;
-      img.data[i+2] = 0;
-      img.data[i+3] = 255;
+      const n=(Math.random()*2-1)*255;
+      img.data[i]=0;
+      img.data[i+1]=120+n*0.08;
+      img.data[i+2]=0;
+      img.data[i+3]=255;
     }
     ctx.putImageData(img,0,0);
   }
 
   resize(){
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    const rect = this.canvas.getBoundingClientRect();
-    const w = Math.max(2, Math.floor(rect.width * dpr));
-    const h = Math.max(2, Math.floor(rect.height * dpr));
-    if(w === this._lastW && h === this._lastH) return;
+    const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+    const rect=this.canvas.getBoundingClientRect();
+    const w=Math.max(2, Math.floor(rect.width*dpr));
+    const h=Math.max(2, Math.floor(rect.height*dpr));
+    if(w===this._lastW && h===this._lastH) return;
 
-    this._lastW = w; this._lastH = h;
-    this.canvas.width = w;
-    this.canvas.height = h;
+    this._lastW=w; this._lastH=h;
+    this.canvas.width=w; this.canvas.height=h;
 
-    // Fit world into canvas with margin, keep aspect ratio
-    const pad = CONFIG.render.pitchMargin * dpr;
-    const sx = (w - pad*2) / CONFIG.world.w;
-    const sy = (h - pad*2) / CONFIG.world.h;
-    this.scale = Math.min(sx, sy);
-    this.offset = new Vec2(
-      (w - CONFIG.world.w * this.scale) * 0.5,
-      (h - CONFIG.world.h * this.scale) * 0.5
+    const pad=CONFIG.render.pitchMargin*dpr;
+    const sx=(w-pad*2)/CONFIG.world.w;
+    const sy=(h-pad*2)/CONFIG.world.h;
+    this.scale=Math.min(sx,sy);
+    this.offset=new Vec2(
+      (w-CONFIG.world.w*this.scale)*0.5,
+      (h-CONFIG.world.h*this.scale)*0.5
     );
   }
 
-  worldToScreen(v){
-    return new Vec2(
-      this.offset.x + v.x * this.scale,
-      this.offset.y + v.y * this.scale
-    );
-  }
-
-  screenToWorld(v){
-    return new Vec2(
-      (v.x - this.offset.x) / this.scale,
-      (v.y - this.offset.y) / this.scale
-    );
-  }
+  worldToScreen(v){ return new Vec2(this.offset.x+v.x*this.scale, this.offset.y+v.y*this.scale); }
+  screenToWorld(v){ return new Vec2((v.x-this.offset.x)/this.scale, (v.y-this.offset.y)/this.scale); }
 
   draw(){
     this.resize();
-    const ctx = this.ctx;
-    const w = this.canvas.width, h = this.canvas.height;
+    const ctx=this.ctx;
+    const w=this.canvas.width, h=this.canvas.height;
     ctx.clearRect(0,0,w,h);
-
     this.drawPitch(ctx);
     this.drawGoals(ctx);
     this.drawBodies(ctx);
@@ -683,683 +540,544 @@ class Renderer {
   }
 
   drawPitch(ctx){
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    const W = CONFIG.world.w, H = CONFIG.world.h;
-    const s = this.scale;
-    const ox = this.offset.x, oy = this.offset.y;
+    const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+    const W=CONFIG.world.w, H=CONFIG.world.h;
+    const s=this.scale;
+    const ox=this.offset.x, oy=this.offset.y;
+    const x0=ox, y0=oy, x1=ox+W*s, y1=oy+H*s;
 
-    // Base grass gradient
-    const x0 = ox, y0 = oy, x1 = ox + W*s, y1 = oy + H*s;
-    const g = ctx.createLinearGradient(x0, y0, x1, y1);
-    g.addColorStop(0, '#0f6b3c');
-    g.addColorStop(0.5, '#0e5f37');
-    g.addColorStop(1, '#0b4a2c');
+    const g=ctx.createLinearGradient(x0,y0,x1,y1);
+    g.addColorStop(0,'#0f6b3c');
+    g.addColorStop(0.5,'#0e5f37');
+    g.addColorStop(1,'#0b4a2c');
 
-    // Pitch rounded rect
-    const r = CONFIG.render.pitchCornerR * dpr;
+    const r=CONFIG.render.pitchCornerR*dpr;
     ctx.save();
-    ctx.beginPath();
-    this.roundRect(ctx, x0, y0, (W*s), (H*s), r);
-    ctx.closePath();
-    ctx.fillStyle = g;
+    ctx.fillStyle=g;
+    this.roundRect(ctx,x0,y0,W*s,H*s,r);
     ctx.fill();
 
-    // Subtle mowing stripes
-    ctx.globalAlpha = 0.13;
-    const stripeCount = 10;
+    ctx.globalAlpha=0.13;
+    const stripeCount=10;
     for(let i=0;i<stripeCount;i++){
-      const yy = y0 + (H*s) * (i/stripeCount);
-      ctx.fillStyle = (i%2===0) ? '#0b4f2f' : '#0f7343';
-      ctx.fillRect(x0, yy, (W*s), (H*s)/stripeCount);
+      const yy=y0+(H*s)*(i/stripeCount);
+      ctx.fillStyle=(i%2===0)?'#0b4f2f':'#0f7343';
+      ctx.fillRect(x0,yy,W*s,(H*s)/stripeCount);
     }
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha=1;
 
-    // Noise overlay
-    ctx.globalAlpha = CONFIG.render.grassNoise;
-    ctx.drawImage(this.noiseCanvas, x0, y0, W*s, H*s);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha=CONFIG.render.grassNoise;
+    ctx.drawImage(this.noiseCanvas,x0,y0,W*s,H*s);
+    ctx.globalAlpha=1;
 
-    // Lines (slight bevel pseudo-3D)
-    const lineW = 3*dpr;
-    ctx.lineWidth = lineW;
-    ctx.strokeStyle = 'rgba(245,255,245,.82)';
-    ctx.shadowColor = 'rgba(0,0,0,.18)';
-    ctx.shadowBlur = 6*dpr;
-    ctx.shadowOffsetX = 1*dpr;
-    ctx.shadowOffsetY = 2*dpr;
+    const lineW=3*dpr;
+    ctx.lineWidth=lineW;
+    ctx.strokeStyle='rgba(245,255,245,.82)';
+    ctx.shadowColor='rgba(0,0,0,.18)';
+    ctx.shadowBlur=6*dpr;
+    ctx.shadowOffsetX=1*dpr;
+    ctx.shadowOffsetY=2*dpr;
 
-    // Outer boundary
-    ctx.beginPath();
-    this.roundRect(ctx, x0+lineW, y0+lineW, W*s-2*lineW, H*s-2*lineW, Math.max(2, r-6*dpr));
+    this.roundRect(ctx,x0+lineW,y0+lineW,W*s-2*lineW,H*s-2*lineW,Math.max(2,r-6*dpr));
     ctx.stroke();
 
-    // Midline
     ctx.beginPath();
-    ctx.moveTo(x0 + (W*s)/2, y0 + lineW);
-    ctx.lineTo(x0 + (W*s)/2, y1 - lineW);
+    ctx.moveTo(x0+(W*s)/2, y0+lineW);
+    ctx.lineTo(x0+(W*s)/2, y1-lineW);
     ctx.stroke();
 
-    // Center circle
     ctx.beginPath();
-    ctx.arc(x0 + (W*s)/2, y0 + (H*s)/2, 110*s, 0, Math.PI*2);
+    ctx.arc(x0+(W*s)/2,y0+(H*s)/2,110*s,0,Math.PI*2);
     ctx.stroke();
 
-    // Center dot
-    ctx.fillStyle = 'rgba(245,255,245,.9)';
-    ctx.shadowBlur = 0;
+    ctx.fillStyle='rgba(245,255,245,.9)';
+    ctx.shadowBlur=0;
     ctx.beginPath();
-    ctx.arc(x0 + (W*s)/2, y0 + (H*s)/2, 5*dpr, 0, Math.PI*2);
+    ctx.arc(x0+(W*s)/2,y0+(H*s)/2,5*dpr,0,Math.PI*2);
     ctx.fill();
 
-    // Small areas at each side
-    const goalOpen = CONFIG.goal.opening;
-    const areaW = 150, areaH = goalOpen + 120;
-    this.strokeRectCentered(ctx, 75, H/2, areaW, areaH, s, x0, y0);
-    this.strokeRectCentered(ctx, W-75, H/2, areaW, areaH, s, x0, y0);
+    const open=CONFIG.goal.opening;
+    const areaW=150, areaH=open+120;
+    this.strokeRectCentered(ctx,75,H/2,areaW,areaH,s,x0,y0);
+    this.strokeRectCentered(ctx,W-75,H/2,areaW,areaH,s,x0,y0);
 
     ctx.restore();
 
-    // Pitch shadow / lift
     ctx.save();
-    ctx.globalCompositeOperation = 'destination-over';
-    ctx.shadowColor = 'rgba(0,0,0,.55)';
-    ctx.shadowBlur = 30*dpr;
-    ctx.shadowOffsetY = 18*dpr;
-    ctx.shadowOffsetX = 0;
-    ctx.fillStyle = 'rgba(0,0,0,.0)';
-    ctx.beginPath();
-    this.roundRect(ctx, x0, y0, W*s, H*s, r);
+    ctx.globalCompositeOperation='destination-over';
+    ctx.shadowColor='rgba(0,0,0,.55)';
+    ctx.shadowBlur=30*dpr;
+    ctx.shadowOffsetY=18*dpr;
+    ctx.shadowOffsetX=0;
+    ctx.fillStyle='rgba(0,0,0,.0)';
+    this.roundRect(ctx,x0,y0,W*s,H*s,r);
     ctx.fill();
     ctx.restore();
   }
 
-  strokeRectCentered(ctx, cx, cy, rw, rh, s, x0, y0){
-    const x = x0 + (cx - rw/2)*s;
-    const y = y0 + (cy - rh/2)*s;
+  strokeRectCentered(ctx,cx,cy,rw,rh,s,x0,y0){
+    const x=x0+(cx-rw/2)*s;
+    const y=y0+(cy-rh/2)*s;
     ctx.beginPath();
-    ctx.rect(x, y, rw*s, rh*s);
+    ctx.rect(x,y,rw*s,rh*s);
     ctx.stroke();
   }
 
   drawGoals(ctx){
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    const W = CONFIG.world.w, H = CONFIG.world.h;
-    const s = this.scale;
-    const ox = this.offset.x, oy = this.offset.y;
-
-    const open = CONFIG.goal.opening;
-    const depth = CONFIG.goal.depth;
-    const postR = CONFIG.goal.postRadius;
-
-    // Left goal
-    this.drawOneGoal(ctx, 'left', ox, oy, s, W, H, open, depth, postR, dpr);
-    // Right goal
-    this.drawOneGoal(ctx, 'right', ox, oy, s, W, H, open, depth, postR, dpr);
+    const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+    const W=CONFIG.world.w, H=CONFIG.world.h;
+    const s=this.scale, ox=this.offset.x, oy=this.offset.y;
+    const open=CONFIG.goal.opening, depth=CONFIG.goal.depth, postR=CONFIG.goal.postRadius;
+    this.drawOneGoal(ctx,'left',ox,oy,s,W,H,open,depth,postR,dpr);
+    this.drawOneGoal(ctx,'right',ox,oy,s,W,H,open,depth,postR,dpr);
   }
 
-  drawOneGoal(ctx, side, ox, oy, s, W, H, open, depth, postR, dpr){
-    const cx = (side==='left') ? 0 : W;
-    const yTop = (H - open)/2;
-    const yBot = yTop + open;
+  drawOneGoal(ctx,side,ox,oy,s,W,H,open,depth,postR,dpr){
+    const cx=(side==='left')?0:W;
+    const yTop=(H-open)/2;
+    const yBot=yTop+open;
+    const xEdge=ox+cx*s;
+    const yT=oy+yTop*s;
+    const yB=oy+yBot*s;
+    const d=depth*s;
+    const dir=(side==='left')?1:-1;
 
-    const xEdge = ox + cx*s;
-    const yT = oy + yTop*s;
-    const yB = oy + yBot*s;
-
-    const d = depth * s;
-    const dir = (side==='left') ? 1 : -1;
-
-    // Net area (pseudo depth)
     ctx.save();
-    ctx.globalAlpha = 1;
-
-    // Back frame
-    ctx.lineWidth = 2.5*dpr;
-    ctx.strokeStyle = 'rgba(255,255,255,.35)';
-    ctx.shadowColor = 'rgba(0,0,0,.25)';
-    ctx.shadowBlur = 10*dpr;
-    ctx.shadowOffsetX = 2*dpr;
-    ctx.shadowOffsetY = 3*dpr;
+    ctx.lineWidth=2.5*dpr;
+    ctx.strokeStyle='rgba(255,255,255,.35)';
+    ctx.shadowColor='rgba(0,0,0,.25)';
+    ctx.shadowBlur=10*dpr;
+    ctx.shadowOffsetX=2*dpr;
+    ctx.shadowOffsetY=3*dpr;
 
     ctx.beginPath();
-    ctx.moveTo(xEdge + dir*d, yT + d*0.2);
-    ctx.lineTo(xEdge + dir*d, yB - d*0.2);
+    ctx.moveTo(xEdge+dir*d,yT+d*0.2);
+    ctx.lineTo(xEdge+dir*d,yB-d*0.2);
     ctx.stroke();
 
-    // "Net" pattern
-    ctx.globalAlpha = CONFIG.goal.netAlpha;
-    ctx.strokeStyle = 'rgba(255,255,255,.7)';
-    ctx.shadowBlur = 0;
+    ctx.globalAlpha=CONFIG.goal.netAlpha;
+    ctx.strokeStyle='rgba(255,255,255,.7)';
+    ctx.shadowBlur=0;
     for(let i=0;i<10;i++){
-      const t = i/9;
-      const yy = lerp(yT+6*dpr, yB-6*dpr, t);
+      const t=i/9;
+      const yy=lerp(yT+6*dpr,yB-6*dpr,t);
       ctx.beginPath();
-      ctx.moveTo(xEdge, yy);
-      ctx.lineTo(xEdge + dir*d, yy + d*0.12*(side==='left'?1:-1));
+      ctx.moveTo(xEdge,yy);
+      ctx.lineTo(xEdge+dir*d,yy+d*0.12*(side==='left'?1:-1));
       ctx.stroke();
     }
     for(let i=0;i<8;i++){
-      const t = i/7;
-      const xx = lerp(xEdge, xEdge + dir*d, t);
+      const t=i/7;
+      const xx=lerp(xEdge,xEdge+dir*d,t);
       ctx.beginPath();
-      ctx.moveTo(xx, yT);
-      ctx.lineTo(xx + dir*d*0.08, yB);
+      ctx.moveTo(xx,yT);
+      ctx.lineTo(xx+dir*d*0.08,yB);
       ctx.stroke();
     }
 
-    // Posts (front)
-    ctx.globalAlpha = 1;
-    ctx.shadowBlur = 16*dpr;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 10*dpr;
-    ctx.shadowColor = 'rgba(0,0,0,.25)';
+    ctx.globalAlpha=1;
+    ctx.shadowBlur=16*dpr;
+    ctx.shadowOffsetX=0;
+    ctx.shadowOffsetY=10*dpr;
+    ctx.shadowColor='rgba(0,0,0,.25)';
 
-    // top post cap + bottom
-    const postX = xEdge + dir*(postR*s*0.15);
-    const r = postR*s;
+    const postX=xEdge+dir*(postR*s*0.15);
+    const r=postR*s;
+    this.drawPost(ctx,postX,yT,r,dpr);
+    this.drawPost(ctx,postX,yB,r,dpr);
 
-    // Top post
-    this.drawPost(ctx, postX, yT, r, dpr);
-    // Bottom post
-    this.drawPost(ctx, postX, yB, r, dpr);
-
-    // Crossbar hint (front)
-    ctx.shadowBlur = 0;
-    ctx.lineWidth = 6*dpr;
-    ctx.strokeStyle = 'rgba(255,255,255,.65)';
+    ctx.shadowBlur=0;
+    ctx.lineWidth=6*dpr;
+    ctx.strokeStyle='rgba(255,255,255,.65)';
     ctx.beginPath();
-    ctx.moveTo(postX, yT);
-    ctx.lineTo(postX, yB);
+    ctx.moveTo(postX,yT);
+    ctx.lineTo(postX,yB);
     ctx.stroke();
 
     ctx.restore();
   }
 
-  drawPost(ctx, x, y, r, dpr){
-    const grd = ctx.createRadialGradient(x-r*0.4, y-r*0.4, r*0.3, x, y, r*1.05);
-    grd.addColorStop(0, 'rgba(255,255,255,.95)');
-    grd.addColorStop(0.6, 'rgba(255,255,255,.55)');
-    grd.addColorStop(1, 'rgba(255,255,255,.25)');
-    ctx.fillStyle = grd;
+  drawPost(ctx,x,y,r,dpr){
+    const grd=ctx.createRadialGradient(x-r*0.4,y-r*0.4,r*0.3,x,y,r*1.05);
+    grd.addColorStop(0,'rgba(255,255,255,.95)');
+    grd.addColorStop(0.6,'rgba(255,255,255,.55)');
+    grd.addColorStop(1,'rgba(255,255,255,.25)');
+    ctx.fillStyle=grd;
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.arc(x,y,r,0,Math.PI*2);
     ctx.fill();
-
-    ctx.strokeStyle = 'rgba(0,0,0,.22)';
-    ctx.lineWidth = 1.2*dpr;
+    ctx.strokeStyle='rgba(0,0,0,.22)';
+    ctx.lineWidth=1.2*dpr;
     ctx.stroke();
   }
 
   drawBodies(ctx){
-    const bodies = this.game.getRenderBodiesSorted();
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-
-    // Shadows first
+    const bodies=this.game.getRenderBodiesSorted();
+    const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+    for(const b of bodies) this.drawShadow(ctx,b,dpr);
     for(const b of bodies){
-      this.drawShadow(ctx, b, dpr);
-    }
-
-    // Then bodies
-    for(const b of bodies){
-      if(b instanceof Ball) this.drawBall(ctx, b, dpr);
-      else this.drawPeg(ctx, b, dpr);
+      if(b instanceof Ball) this.drawBall(ctx,b,dpr);
+      else this.drawPeg(ctx,b,dpr);
     }
   }
 
-  drawShadow(ctx, b, dpr){
-    const sp = this.worldToScreen(b.p);
-    const r = b.r * this.scale;
-    const off = CONFIG.render.shadowOffset;
-    const sx = sp.x + off.x*dpr;
-    const sy = sp.y + off.y*dpr;
+  drawShadow(ctx,b,dpr){
+    const sp=this.worldToScreen(b.p);
+    const r=b.r*this.scale;
+    const off=CONFIG.render.shadowOffset;
+    const sx=sp.x+off.x*dpr;
+    const sy=sp.y+off.y*dpr;
 
     ctx.save();
-    ctx.globalAlpha = 0.38;
-    ctx.fillStyle = 'rgba(0,0,0,.55)';
-    ctx.shadowColor = 'rgba(0,0,0,.55)';
-    ctx.shadowBlur = CONFIG.render.shadowBlur * dpr;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-
+    ctx.globalAlpha=0.38;
+    ctx.fillStyle='rgba(0,0,0,.55)';
+    ctx.shadowColor='rgba(0,0,0,.55)';
+    ctx.shadowBlur=CONFIG.render.shadowBlur*dpr;
     ctx.beginPath();
-    ctx.ellipse(sx, sy, r*1.05, r*0.78, 0, 0, Math.PI*2);
+    ctx.ellipse(sx,sy,r*1.05,r*0.78,0,0,Math.PI*2);
     ctx.fill();
     ctx.restore();
   }
 
-  drawBall(ctx, ball, dpr){
-    const sp = this.worldToScreen(ball.p);
-    const r = ball.r * this.scale;
-
+  drawBall(ctx,ball,dpr){
+    const sp=this.worldToScreen(ball.p);
+    const r=ball.r*this.scale;
     ctx.save();
-
-    // Ball base gradient
-    const g = ctx.createRadialGradient(sp.x - r*0.35, sp.y - r*0.35, r*0.35, sp.x, sp.y, r*1.15);
-    g.addColorStop(0, 'rgba(255,255,255,.98)');
-    g.addColorStop(0.35, 'rgba(255,255,255,.92)');
-    g.addColorStop(0.7, 'rgba(220,230,255,.88)');
-    g.addColorStop(1, 'rgba(140,160,190,.85)');
-
-    ctx.fillStyle = g;
+    const g=ctx.createRadialGradient(sp.x-r*0.35,sp.y-r*0.35,r*0.35,sp.x,sp.y,r*1.15);
+    g.addColorStop(0,'rgba(255,255,255,.98)');
+    g.addColorStop(0.35,'rgba(255,255,255,.92)');
+    g.addColorStop(0.7,'rgba(220,230,255,.88)');
+    g.addColorStop(1,'rgba(140,160,190,.85)');
+    ctx.fillStyle=g;
     ctx.beginPath();
-    ctx.arc(sp.x, sp.y, r, 0, Math.PI*2);
+    ctx.arc(sp.x,sp.y,r,0,Math.PI*2);
     ctx.fill();
-
-    // Rim
-    ctx.strokeStyle = 'rgba(0,0,0,.18)';
-    ctx.lineWidth = 1.3*dpr;
+    ctx.strokeStyle='rgba(0,0,0,.18)';
+    ctx.lineWidth=1.3*dpr;
     ctx.stroke();
-
-    // Specular highlight
-    ctx.globalAlpha = 0.55;
-    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.globalAlpha=0.55;
+    ctx.fillStyle='rgba(255,255,255,.85)';
     ctx.beginPath();
-    ctx.ellipse(sp.x - r*0.25, sp.y - r*0.35, r*0.35, r*0.25, -0.6, 0, Math.PI*2);
+    ctx.ellipse(sp.x-r*0.25,sp.y-r*0.35,r*0.35,r*0.25,-0.6,0,Math.PI*2);
     ctx.fill();
     ctx.restore();
   }
 
-  drawPeg(ctx, peg, dpr){
-    const sp = this.worldToScreen(peg.p);
-    const r = peg.r * this.scale;
-
-    // Team colors (with pseudo-3D)
-    const base = (peg.team === 'A') ? {a:'#ff6b6b', b:'#b81f3d'} : {a:'#4da3ff', b:'#124fae'};
-
+  drawPeg(ctx,peg,dpr){
+    const sp=this.worldToScreen(peg.p);
+    const r=peg.r*this.scale;
+    const base=(peg.team==='A')?{a:'#ff6b6b',b:'#b81f3d'}:{a:'#4da3ff',b:'#124fae'};
     ctx.save();
-
-    // Cylinder shading: radial + directional highlight
-    const g = ctx.createRadialGradient(sp.x - r*0.35, sp.y - r*0.25, r*0.2, sp.x, sp.y, r*1.15);
-    g.addColorStop(0, 'rgba(255,255,255,.55)');
-    g.addColorStop(0.18, base.a);
-    g.addColorStop(1, base.b);
-
-    ctx.fillStyle = g;
+    const g=ctx.createRadialGradient(sp.x-r*0.35,sp.y-r*0.25,r*0.2,sp.x,sp.y,r*1.15);
+    g.addColorStop(0,'rgba(255,255,255,.55)');
+    g.addColorStop(0.18,base.a);
+    g.addColorStop(1,base.b);
+    ctx.fillStyle=g;
     ctx.beginPath();
-    ctx.arc(sp.x, sp.y, r, 0, Math.PI*2);
+    ctx.arc(sp.x,sp.y,r,0,Math.PI*2);
     ctx.fill();
 
-    // Subtle "wood-ish" grain hint (still procedural, no assets)
-    ctx.globalAlpha = 0.10;
-    ctx.strokeStyle = 'rgba(255,255,255,.7)';
-    ctx.lineWidth = 1*dpr;
+    ctx.globalAlpha=0.10;
+    ctx.strokeStyle='rgba(255,255,255,.7)';
+    ctx.lineWidth=1*dpr;
     for(let i=0;i<3;i++){
-      const ang = peg.spinHint + i*0.85;
+      const ang=peg.spinHint+i*0.85;
       ctx.beginPath();
-      ctx.arc(sp.x, sp.y, r*(0.55 + i*0.12), ang, ang + Math.PI*1.6);
+      ctx.arc(sp.x,sp.y,r*(0.55+i*0.12),ang,ang+Math.PI*1.6);
       ctx.stroke();
     }
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha=1;
 
-    // Outline
-    ctx.strokeStyle = 'rgba(0,0,0,.22)';
-    ctx.lineWidth = 1.4*dpr;
+    ctx.strokeStyle='rgba(0,0,0,.22)';
+    ctx.lineWidth=1.4*dpr;
     ctx.stroke();
 
-    // Highlight strip (cylinder shine)
-    ctx.globalAlpha = 0.55;
-    const hg = ctx.createLinearGradient(sp.x - r*0.7, sp.y - r*0.2, sp.x + r*0.7, sp.y + r*0.2);
-    hg.addColorStop(0, 'rgba(255,255,255,.0)');
-    hg.addColorStop(0.38, 'rgba(255,255,255,.42)');
-    hg.addColorStop(0.62, 'rgba(255,255,255,.12)');
-    hg.addColorStop(1, 'rgba(255,255,255,.0)');
-    ctx.fillStyle = hg;
+    ctx.globalAlpha=0.55;
+    const hg=ctx.createLinearGradient(sp.x-r*0.7,sp.y-r*0.2,sp.x+r*0.7,sp.y+r*0.2);
+    hg.addColorStop(0,'rgba(255,255,255,.0)');
+    hg.addColorStop(0.38,'rgba(255,255,255,.42)');
+    hg.addColorStop(0.62,'rgba(255,255,255,.12)');
+    hg.addColorStop(1,'rgba(255,255,255,.0)');
+    ctx.fillStyle=hg;
     ctx.beginPath();
-    ctx.ellipse(sp.x - r*0.1, sp.y - r*0.1, r*0.9, r*0.55, -0.55, 0, Math.PI*2);
+    ctx.ellipse(sp.x-r*0.1,sp.y-r*0.1,r*0.9,r*0.55,-0.55,0,Math.PI*2);
     ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha=1;
 
-    // Selected ring
-    if(this.game.input.selectedPeg && this.game.input.selectedPeg.id === peg.id && this.game.input.selectedPeg.team === peg.team){
-      ctx.strokeStyle = 'rgba(125,211,252,.95)';
-      ctx.lineWidth = 3*dpr;
+    if(this.game.input.selectedPeg && this.game.input.selectedPeg.id===peg.id && this.game.input.selectedPeg.team===peg.team){
+      ctx.strokeStyle='rgba(125,211,252,.95)';
+      ctx.lineWidth=3*dpr;
       ctx.beginPath();
-      ctx.arc(sp.x, sp.y, r + 4*dpr, 0, Math.PI*2);
+      ctx.arc(sp.x,sp.y,r+4*dpr,0,Math.PI*2);
       ctx.stroke();
     }
-
     ctx.restore();
   }
 
   drawAim(ctx){
-    const input = this.game.input;
+    const input=this.game.input;
     if(!input.isAiming) return;
-    const peg = input.selectedPegObj;
+    const peg=input.selectedPegObj;
     if(!peg || !peg.active) return;
 
-    const ctx = this.ctx;
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    const p = this.worldToScreen(peg.p);
-    const m = input.mouseScreen;
+    const ctx=this.ctx;
+    const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+    const p=this.worldToScreen(peg.p);
+    const m=input.mouseScreen;
 
-    // Aim line from peg to mouse, but flick impulse is opposite direction
-    const dx = m.x - p.x, dy = m.y - p.y;
-    const dist = Math.hypot(dx, dy);
-    const maxD = CONFIG.flick.maxDrag * dpr;
-    const t = clamp(dist / maxD, 0, 1);
+    const dx=m.x-p.x, dy=m.y-p.y;
+    const dist=Math.hypot(dx,dy);
+    const maxD=CONFIG.flick.maxDrag*dpr;
+    const t=clamp(dist/maxD,0,1);
 
-    // Line
     ctx.save();
-    ctx.lineWidth = CONFIG.flick.aimLineWidth * dpr;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = `rgba(125,211,252,${0.18 + 0.62*t})`;
-    ctx.shadowColor = 'rgba(0,0,0,.35)';
-    ctx.shadowBlur = 10*dpr;
+    ctx.lineWidth=CONFIG.flick.aimLineWidth*dpr;
+    ctx.lineCap='round';
+    ctx.strokeStyle=`rgba(125,211,252,${0.18+0.62*t})`;
+    ctx.shadowColor='rgba(0,0,0,.35)';
+    ctx.shadowBlur=10*dpr;
 
     ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(p.x + dx*clamp(maxD/(dist||1), 0, 1), p.y + dy*clamp(maxD/(dist||1), 0, 1));
+    ctx.moveTo(p.x,p.y);
+    ctx.lineTo(p.x+dx*clamp(maxD/(dist||1),0,1), p.y+dy*clamp(maxD/(dist||1),0,1));
     ctx.stroke();
 
-    // Arrow head
-    const end = { x: p.x + dx*clamp(maxD/(dist||1), 0, 1), y: p.y + dy*clamp(maxD/(dist||1), 0, 1) };
-    const ang = Math.atan2(dy, dx);
-    const ah = 10*dpr;
+    const end={ x:p.x+dx*clamp(maxD/(dist||1),0,1), y:p.y+dy*clamp(maxD/(dist||1),0,1) };
+    const ang=Math.atan2(dy,dx);
+    const ah=10*dpr;
     ctx.beginPath();
-    ctx.moveTo(end.x, end.y);
-    ctx.lineTo(end.x - Math.cos(ang-0.55)*ah, end.y - Math.sin(ang-0.55)*ah);
-    ctx.lineTo(end.x - Math.cos(ang+0.55)*ah, end.y - Math.sin(ang+0.55)*ah);
+    ctx.moveTo(end.x,end.y);
+    ctx.lineTo(end.x-Math.cos(ang-0.55)*ah, end.y-Math.sin(ang-0.55)*ah);
+    ctx.lineTo(end.x-Math.cos(ang+0.55)*ah, end.y-Math.sin(ang+0.55)*ah);
     ctx.closePath();
-    ctx.fillStyle = `rgba(125,211,252,${0.22 + 0.58*t})`;
+    ctx.fillStyle=`rgba(125,211,252,${0.22+0.58*t})`;
     ctx.fill();
 
-    // Power bar (bottom-left of pitch area)
-    const W = this.canvas.width, H = this.canvas.height;
-    const bw = 170*dpr, bh = 10*dpr;
-    const bx = this.offset.x + 14*dpr, by = this.offset.y + (CONFIG.world.h*this.scale) - 20*dpr;
+    const bw=170*dpr, bh=10*dpr;
+    const bx=this.offset.x+14*dpr, by=this.offset.y+(CONFIG.world.h*this.scale)-20*dpr;
+    ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(0,0,0,.25)';
+    this.roundRect(ctx,bx,by,bw,bh,6*dpr); ctx.fill();
 
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(0,0,0,.25)';
-    this.roundRect(ctx, bx, by, bw, bh, 6*dpr);
-    ctx.fill();
-
-    const pw = bw * t;
-    const pg = ctx.createLinearGradient(bx, by, bx+bw, by);
-    pg.addColorStop(0, 'rgba(52,211,153,.9)');
-    pg.addColorStop(0.55, 'rgba(125,211,252,.9)');
-    pg.addColorStop(1, 'rgba(251,113,133,.9)');
-    ctx.fillStyle = pg;
-    this.roundRect(ctx, bx, by, pw, bh, 6*dpr);
-    ctx.fill();
+    const pw=bw*t;
+    const pg=ctx.createLinearGradient(bx,by,bx+bw,by);
+    pg.addColorStop(0,'rgba(52,211,153,.9)');
+    pg.addColorStop(0.55,'rgba(125,211,252,.9)');
+    pg.addColorStop(1,'rgba(251,113,133,.9)');
+    ctx.fillStyle=pg;
+    this.roundRect(ctx,bx,by,pw,bh,6*dpr); ctx.fill();
 
     ctx.restore();
   }
 
   drawGoalRipple(ctx){
-    const eff = this.game.effects;
+    const eff=this.game.effects;
     if(!eff.goalRipple) return;
+    const t=(nowMs()-eff.goalRipple.t0)/CONFIG.effects.goalRippleMs;
+    if(t>=1){ eff.goalRipple=null; return; }
 
-    const t = (nowMs() - eff.goalRipple.t0) / CONFIG.effects.goalRippleMs;
-    if(t >= 1){
-      eff.goalRipple = null;
-      return;
-    }
-
-    const side = eff.goalRipple.side;
-    const W = CONFIG.world.w, H = CONFIG.world.h;
-    const open = CONFIG.goal.opening;
-
-    const x = (side==='left') ? 0 : W;
-    const y = H/2;
-
-    const center = this.worldToScreen(new Vec2(x, y));
-    const maxR = 210 * this.scale;
-    const r = lerp(12*this.scale, maxR, t);
+    const side=eff.goalRipple.side;
+    const W=CONFIG.world.w, H=CONFIG.world.h;
+    const x=(side==='left')?0:W;
+    const y=H/2;
+    const center=this.worldToScreen(new Vec2(x,y));
+    const maxR=210*this.scale;
+    const r=lerp(12*this.scale,maxR,t);
 
     ctx.save();
-    ctx.globalAlpha = (1 - t) * 0.55;
-    ctx.strokeStyle = (side==='left') ? 'rgba(255,107,107,.95)' : 'rgba(77,163,255,.95)';
-    ctx.lineWidth = 3 * (Math.max(1, Math.min(2, window.devicePixelRatio || 1)));
+    ctx.globalAlpha=(1-t)*0.55;
+    ctx.strokeStyle=(side==='left')?'rgba(255,107,107,.95)':'rgba(77,163,255,.95)';
+    ctx.lineWidth=3*(Math.max(1, Math.min(2, window.devicePixelRatio||1)));
     ctx.beginPath();
-    ctx.arc(center.x, center.y, r, -Math.PI/2, Math.PI/2);
+    ctx.arc(center.x,center.y,r,-Math.PI/2,Math.PI/2);
     ctx.stroke();
 
-    // Flash overlay near goal mouth
-    ctx.globalAlpha = (1 - t) * CONFIG.effects.goalFlashAlpha;
-    const dir = (side==='left') ? 1 : -1;
-    const mouthH = open * this.scale;
-    ctx.fillStyle = 'white';
-    ctx.fillRect(center.x + dir*2, center.y - mouthH/2, dir*40, mouthH);
-
+    ctx.globalAlpha=(1-t)*CONFIG.effects.goalFlashAlpha;
+    const dir=(side==='left')?1:-1;
+    const mouthH=CONFIG.goal.opening*this.scale;
+    ctx.fillStyle='white';
+    ctx.fillRect(center.x+dir*2, center.y-mouthH/2, dir*40, mouthH);
     ctx.restore();
   }
 
   drawVignette(ctx){
     if(!CONFIG.render.vignette) return;
-    const w = this.canvas.width, h = this.canvas.height;
-    const g = ctx.createRadialGradient(w*0.5, h*0.5, Math.min(w,h)*0.25, w*0.5, h*0.5, Math.max(w,h)*0.65);
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(1, 'rgba(0,0,0,.35)');
+    const w=this.canvas.width, h=this.canvas.height;
+    const g=ctx.createRadialGradient(w*0.5,h*0.5,Math.min(w,h)*0.25,w*0.5,h*0.5,Math.max(w,h)*0.65);
+    g.addColorStop(0,'rgba(0,0,0,0)');
+    g.addColorStop(1,'rgba(0,0,0,.35)');
     ctx.save();
-    ctx.fillStyle = g;
+    ctx.fillStyle=g;
     ctx.fillRect(0,0,w,h);
     ctx.restore();
   }
 
-  roundRect(ctx, x, y, w, h, r){
-    const rr = Math.min(r, w/2, h/2);
+  roundRect(ctx,x,y,w,h,r){
+    const rr=Math.min(r,w/2,h/2);
     ctx.beginPath();
-    ctx.moveTo(x+rr, y);
-    ctx.arcTo(x+w, y, x+w, y+h, rr);
-    ctx.arcTo(x+w, y+h, x, y+h, rr);
-    ctx.arcTo(x, y+h, x, y, rr);
-    ctx.arcTo(x, y, x+w, y, rr);
+    ctx.moveTo(x+rr,y);
+    ctx.arcTo(x+w,y,x+w,y+h,rr);
+    ctx.arcTo(x+w,y+h,x,y+h,rr);
+    ctx.arcTo(x,y+h,x,y,rr);
+    ctx.arcTo(x,y,x+w,y,rr);
     ctx.closePath();
   }
 }
 
-/* =========================
-   Input (selection + aiming)
-========================= */
-class Input {
-  constructor(game, canvas, renderer){
-    this.game = game;
-    this.canvas = canvas;
-    this.renderer = renderer;
-
-    this.mouseScreen = new Vec2(0,0);
-    this.mouseWorld = new Vec2(0,0);
-
-    this.selectedPeg = null;      // {team,id}
-    this.selectedPegObj = null;
-
-    this.isDown = false;
-    this.isAiming = false;
-    this.downOnSelected = false;
-
+class Input{
+  constructor(game,canvas,renderer){
+    this.game=game; this.canvas=canvas; this.renderer=renderer;
+    this.mouseScreen=new Vec2(0,0);
+    this.mouseWorld=new Vec2(0,0);
+    this.selectedPeg=null;
+    this.selectedPegObj=null;
+    this.isDown=false;
+    this.isAiming=false;
+    this.downOnSelected=false;
     this.bind();
   }
-
   bind(){
-    const onPointerDown = (e) => {
-      if(this.game.state.phase !== 'ready') return;
+    const onPointerDown=(e)=>{
+      if(this.game.state.phase!=='ready') return;
       this.canvas.setPointerCapture?.(e.pointerId);
+      const p=this.getPointerPos(e);
+      this.mouseScreen=p;
+      this.mouseWorld=this.renderer.screenToWorld(p);
+      this.isDown=true;
 
-      const p = this.getPointerPos(e);
-      this.mouseScreen = p;
-      this.mouseWorld = this.renderer.screenToWorld(p);
-
-      this.isDown = true;
-
-      // Try select peg if clicked on current team's peg
-      const peg = this.game.pickPegAt(this.mouseWorld, this.game.state.turn);
+      const peg=this.game.pickPegAt(this.mouseWorld,this.game.state.turn);
       if(peg){
-        this.selectedPeg = { team: peg.team, id: peg.id };
-        this.selectedPegObj = peg;
-        this.downOnSelected = true;
-        this.isAiming = true;
+        this.selectedPeg={ team: peg.team, id: peg.id };
+        this.selectedPegObj=peg;
+        this.downOnSelected=true;
+        this.isAiming=true;
       } else {
-        this.downOnSelected = false;
-        // Clicking elsewhere does not deselect to avoid frustration; but if you click far, it's ok to deselect
-        // Keep previous selection.
+        this.downOnSelected=false;
       }
     };
 
-    const onPointerMove = (e) => {
-      const p = this.getPointerPos(e);
-      this.mouseScreen = p;
-      this.mouseWorld = this.renderer.screenToWorld(p);
+    const onPointerMove=(e)=>{
+      const p=this.getPointerPos(e);
+      this.mouseScreen=p;
+      this.mouseWorld=this.renderer.screenToWorld(p);
     };
 
-    const onPointerUp = (e) => {
+    const onPointerUp=(e)=>{
       if(!this.isDown) return;
-      this.isDown = false;
+      this.isDown=false;
 
-      if(this.game.state.phase !== 'ready'){
-        this.isAiming = false;
-        this.downOnSelected = false;
+      if(this.game.state.phase!=='ready'){
+        this.isAiming=false; this.downOnSelected=false;
         return;
       }
-
       if(this.isAiming && this.downOnSelected && this.selectedPegObj && this.selectedPegObj.active){
-        // Execute flick
-        const peg = this.selectedPegObj;
-        const sp = this.renderer.worldToScreen(peg.p);
-        const p = this.mouseScreen;
+        const peg=this.selectedPegObj;
+        const sp=this.renderer.worldToScreen(peg.p);
+        const p=this.mouseScreen;
 
-        // Drag vector (screen space)
-        const dx = p.x - sp.x;
-        const dy = p.y - sp.y;
-        const dist = Math.hypot(dx, dy);
-        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-        const maxD = CONFIG.flick.maxDrag * dpr;
+        const dx=p.x-sp.x, dy=p.y-sp.y;
+        const dist=Math.hypot(dx,dy);
+        const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+        const maxD=CONFIG.flick.maxDrag*dpr;
 
-        const clamped = Math.min(dist, maxD);
-        const t = clamped / maxD;
+        const clamped=Math.min(dist,maxD);
+        const t=clamped/maxD;
 
-        // Convert to world impulse direction (opposite to drag)
-        if(clamped > 2*dpr){
-          const dir = new Vec2(-dx, -dy).mul(1/(dist||1)); // opposite
-          const impulse = lerp(CONFIG.flick.minImpulse, CONFIG.flick.maxImpulse, t);
-          this.game.tryFlick(peg, dir, impulse);
+        if(clamped>2*dpr){
+          const dir=new Vec2(-dx,-dy).mul(1/(dist||1));
+          const impulse=lerp(CONFIG.flick.minImpulse, CONFIG.flick.maxImpulse, t);
+          this.game.tryFlick(peg,dir,impulse);
         }
       }
-
-      this.isAiming = false;
-      this.downOnSelected = false;
+      this.isAiming=false;
+      this.downOnSelected=false;
     };
 
     this.canvas.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove, { passive:true });
     window.addEventListener('pointerup', onPointerUp);
 
-    // Prevent touch scrolling inside canvas while interacting
     this.canvas.addEventListener('touchstart', (e)=>e.preventDefault(), {passive:false});
     this.canvas.addEventListener('touchmove', (e)=>e.preventDefault(), {passive:false});
   }
 
   getPointerPos(e){
-    const rect = this.canvas.getBoundingClientRect();
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    return new Vec2(
-      (e.clientX - rect.left) * dpr,
-      (e.clientY - rect.top) * dpr
-    );
+    const rect=this.canvas.getBoundingClientRect();
+    const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+    return new Vec2((e.clientX-rect.left)*dpr, (e.clientY-rect.top)*dpr);
   }
 }
 
-/* =========================
-   Sound (optional WebAudio)
-========================= */
-class Sound {
-  constructor(){
-    this.ctx = null;
-  }
+class Sound{
+  constructor(){ this.ctx=null; }
   ensure(){
     if(!CONFIG.sound.enabled) return null;
     if(this.ctx) return this.ctx;
-    try{
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      return this.ctx;
-    }catch(_){
-      return null;
-    }
+    try{ this.ctx=new (window.AudioContext||window.webkitAudioContext)(); return this.ctx; }
+    catch(_){ return null; }
   }
   goal(){
-    const ctx = this.ensure();
-    if(!ctx) return;
+    const ctx=this.ensure(); if(!ctx) return;
+    const t0=ctx.currentTime;
+    const vol=CONFIG.sound.goalVolume;
 
-    const t0 = ctx.currentTime;
-    const vol = CONFIG.sound.goalVolume;
+    const osc1=ctx.createOscillator();
+    const osc2=ctx.createOscillator();
+    const gain=ctx.createGain();
+    const filter=ctx.createBiquadFilter();
 
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
+    filter.type='lowpass';
+    filter.frequency.setValueAtTime(2200,t0);
 
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(2200, t0);
+    osc1.type='sine';
+    osc2.type='triangle';
 
-    osc1.type = 'sine';
-    osc2.type = 'triangle';
+    osc1.frequency.setValueAtTime(420,t0);
+    osc1.frequency.exponentialRampToValueAtTime(780,t0+0.18);
+    osc2.frequency.setValueAtTime(220,t0);
+    osc2.frequency.exponentialRampToValueAtTime(330,t0+0.18);
 
-    osc1.frequency.setValueAtTime(420, t0);
-    osc1.frequency.exponentialRampToValueAtTime(780, t0 + 0.18);
-    osc2.frequency.setValueAtTime(220, t0);
-    osc2.frequency.exponentialRampToValueAtTime(330, t0 + 0.18);
+    gain.gain.setValueAtTime(0.0001,t0);
+    gain.gain.exponentialRampToValueAtTime(vol,t0+0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001,t0+0.35);
 
-    gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+    osc1.connect(filter); osc2.connect(filter);
+    filter.connect(gain); gain.connect(ctx.destination);
 
-    osc1.connect(filter);
-    osc2.connect(filter);
-    filter.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc1.start(t0);
-    osc2.start(t0);
-    osc1.stop(t0 + 0.4);
-    osc2.stop(t0 + 0.4);
+    osc1.start(t0); osc2.start(t0);
+    osc1.stop(t0+0.4); osc2.stop(t0+0.4);
   }
 }
 
-/* =========================
-   Game
-========================= */
-class Game {
+class Game{
   constructor(canvas){
-    this.canvas = canvas;
+    this.canvas=canvas;
+    this.state={ turn:'A', scoreA:0, scoreB:0, removedA:0, removedB:0, phase:'ready', winner:null };
+    this.effects={ goalBannerUntil:0, goalRipple:null, goalPauseUntil:0 };
 
-    this.state = {
-      turn: 'A',
-      scoreA: 0,
-      scoreB: 0,
-      removedA: 0,
-      removedB: 0,
-      phase: 'ready', // 'ready' | 'simulating' | 'paused' | 'gameover'
-      winner: null,
-    };
-
-    this.effects = {
-      goalBannerUntil: 0,
-      goalRipple: null, // {side, t0}
-      goalPauseUntil: 0,
-    };
-
-    this.ball = new Ball(CONFIG.world.w/2, CONFIG.world.h/2);
-    this.pegs = [];
+    this.ball=new Ball(CONFIG.world.w/2, CONFIG.world.h/2);
+    this.pegs=[];
     this.buildInitialTeams();
 
-    this.physics = new Physics(this);
-    this.sound = new Sound();
+    this.physics=new Physics(this);
+    this.sound=new Sound();
 
-    this.renderer = new Renderer(this, canvas);
-    this.input = new Input(this, canvas, this.renderer);
+    this.renderer=new Renderer(this, canvas);
+    this.input=new Input(this, canvas, this.renderer);
 
-    this.undoSnapshot = null;
-    this.lastFrameMs = nowMs();
-    this.acc = 0;
+    this.undoSnapshot=null;
+    this.lastFrameMs=nowMs();
+    this.acc=0;
 
-    this.ui = {
-      scoreA: document.getElementById('scoreA'),
-      scoreB: document.getElementById('scoreB'),
-      turnText: document.getElementById('turnText'),
-      turnPill: document.getElementById('turnPill'),
-      btnUndo: document.getElementById('btnUndo'),
-      btnReset: document.getElementById('btnReset'),
-      btnHelp: document.getElementById('btnHelp'),
-      goalBanner: document.getElementById('goalBanner'),
+    this.ui={
+      scoreA:document.getElementById('scoreA'),
+      scoreB:document.getElementById('scoreB'),
+      turnText:document.getElementById('turnText'),
+      turnPill:document.getElementById('turnPill'),
+      btnUndo:document.getElementById('btnUndo'),
+      btnReset:document.getElementById('btnReset'),
+      btnHelp:document.getElementById('btnHelp'),
+      goalBanner:document.getElementById('goalBanner'),
     };
 
     this.bindUI();
@@ -1368,534 +1086,356 @@ class Game {
   }
 
   buildInitialTeams(){
-    this.pegs = [];
-    const W = CONFIG.world.w, H = CONFIG.world.h;
+    this.pegs=[];
+    const W=CONFIG.world.w, H=CONFIG.world.h;
 
-    // A on left half, B on right half
-    const formation = (team) => {
-      const baseX = (team==='A') ? W*0.22 : W*0.78;
-      const side = (team==='A') ? -1 : 1;
-      const spreadX = 120;
-      const spreadY = 90;
-
-      // 11 pegs: 1 GK + 4 + 4 + 2 (simple)
-      const pts = [];
-      pts.push({ x: baseX + side*170, y: H*0.5 }); // GK (closer to own goal)
-      const rows = [
+    const formation=(team)=>{
+      const baseX=(team==='A')?W*0.22:W*0.78;
+      const side=(team==='A')?-1:1;
+      const spreadY=90;
+      const pts=[];
+      pts.push({ x: baseX + side*170, y: H*0.5 });
+      const rows=[
         { n:4, x: baseX + side*80,  y: H*0.5, dy: spreadY },
         { n:4, x: baseX,           y: H*0.5, dy: spreadY },
         { n:2, x: baseX - side*100,y: H*0.5, dy: spreadY*0.8 },
       ];
       for(const row of rows){
         for(let i=0;i<row.n;i++){
-          const t = (row.n===1) ? 0 : (i/(row.n-1) - 0.5);
+          const t=(row.n===1)?0:(i/(row.n-1)-0.5);
           pts.push({ x: row.x, y: row.y + t*row.dy*2 });
         }
       }
-      // Slight jitter for natural look (still deterministic-ish)
       for(const p of pts){
-        p.x += (Math.random()*2-1) * 10;
-        p.y += (Math.random()*2-1) * 12;
+        p.x += (Math.random()*2-1)*10;
+        p.y += (Math.random()*2-1)*12;
       }
       return pts;
     };
 
-    const ptsA = formation('A');
-    const ptsB = formation('B');
+    const ptsA=formation('A');
+    const ptsB=formation('B');
 
     for(let i=0;i<CONFIG.teams.count;i++){
-      const p = ptsA[i] || {x: CONFIG.world.w*0.25, y: CONFIG.world.h*(0.2 + 0.6*i/(CONFIG.teams.count-1))};
+      const p=ptsA[i] || {x:W*0.25, y:H*(0.2+0.6*i/(CONFIG.teams.count-1))};
       this.pegs.push(new Peg(p.x,p.y,'A',`A${i}`));
     }
     for(let i=0;i<CONFIG.teams.count;i++){
-      const p = ptsB[i] || {x: CONFIG.world.w*0.75, y: CONFIG.world.h*(0.2 + 0.6*i/(CONFIG.teams.count-1))};
+      const p=ptsB[i] || {x:W*0.75, y:H*(0.2+0.6*i/(CONFIG.teams.count-1))};
       this.pegs.push(new Peg(p.x,p.y,'B',`B${i}`));
     }
   }
 
   bindUI(){
-    const back = document.getElementById('helpBack');
-    const btnClose = document.getElementById('btnCloseHelp');
+    const back=document.getElementById('helpBack');
+    const btnClose=document.getElementById('btnCloseHelp');
 
-    this.ui.btnReset.addEventListener('click', () => this.resetMatch());
-    this.ui.btnUndo.addEventListener('click', () => this.undo());
-    this.ui.btnHelp.addEventListener('click', () => back.classList.add('show'));
-    btnClose.addEventListener('click', () => back.classList.remove('show'));
-    back.addEventListener('click', (e) => { if(e.target === back) back.classList.remove('show'); });
+    this.ui.btnReset.addEventListener('click', ()=>this.resetMatch());
+    this.ui.btnUndo.addEventListener('click', ()=>this.undo());
+    this.ui.btnHelp.addEventListener('click', ()=>back.classList.add('show'));
+    btnClose.addEventListener('click', ()=>back.classList.remove('show'));
+    back.addEventListener('click', (e)=>{ if(e.target===back) back.classList.remove('show'); });
 
-    // Enable AudioContext on first interaction (browser policy)
-    window.addEventListener('pointerdown', () => {
+    window.addEventListener('pointerdown', ()=>{
       if(CONFIG.sound.enabled){
-        const ctx = this.sound.ensure();
-        if(ctx && ctx.state === 'suspended') ctx.resume().catch(()=>{});
+        const ctx=this.sound.ensure();
+        if(ctx && ctx.state==='suspended') ctx.resume().catch(()=>{});
       }
     }, { once:false });
   }
 
   updateHUD(){
-    this.ui.scoreA.textContent = String(this.state.scoreA);
-    this.ui.scoreB.textContent = String(this.state.scoreB);
-
-    this.ui.turnText.textContent = (this.state.turn === 'A') ? 'Equipo A' : 'Equipo B';
-    this.ui.turnPill.style.background = (this.state.turn === 'A') ? '#ff6b6b' : '#4da3ff';
-
-    // Undo available only if we have a snapshot and we are not mid-simulating
-    this.ui.btnUndo.disabled = !this.undoSnapshot || (this.state.phase === 'simulating') || (this.state.phase === 'paused');
+    this.ui.scoreA.textContent=String(this.state.scoreA);
+    this.ui.scoreB.textContent=String(this.state.scoreB);
+    this.ui.turnText.textContent=(this.state.turn==='A')?'Equipo A':'Equipo B';
+    this.ui.turnPill.style.background=(this.state.turn==='A')?'#ff6b6b':'#4da3ff';
+    this.ui.btnUndo.disabled=!this.undoSnapshot || (this.state.phase==='simulating') || (this.state.phase==='paused');
   }
 
-  /* ---------- State snapshots (Undo) ---------- */
   makeSnapshot(){
-    const snap = {
+    return {
       state: deepClone(this.state),
       ball: { p:{x:this.ball.p.x,y:this.ball.p.y}, v:{x:this.ball.v.x,y:this.ball.v.y}, active:this.ball.active },
-      pegs: this.pegs.map(p => ({
-        id: p.id, team: p.team, active: p.active,
-        p:{x:p.p.x,y:p.p.y}, v:{x:p.v.x,y:p.v.y}
-      })),
+      pegs: this.pegs.map(p=>({ id:p.id, team:p.team, active:p.active, p:{x:p.p.x,y:p.p.y}, v:{x:p.v.x,y:p.v.y} }))
     };
-    return snap;
   }
 
   applySnapshot(snap){
-    this.state = deepClone(snap.state);
-    this.ball.p.x = snap.ball.p.x; this.ball.p.y = snap.ball.p.y;
-    this.ball.v.x = snap.ball.v.x; this.ball.v.y = snap.ball.v.y;
-    this.ball.active = snap.ball.active;
+    this.state=deepClone(snap.state);
+    this.ball.p.x=snap.ball.p.x; this.ball.p.y=snap.ball.p.y;
+    this.ball.v.x=snap.ball.v.x; this.ball.v.y=snap.ball.v.y;
+    this.ball.active=snap.ball.active;
 
-    const map = new Map(this.pegs.map(p=>[p.id,p]));
+    const map=new Map(this.pegs.map(p=>[p.id,p]));
     for(const sp of snap.pegs){
-      const p = map.get(sp.id);
+      const p=map.get(sp.id);
       if(!p) continue;
-      p.active = sp.active;
-      p.p.x = sp.p.x; p.p.y = sp.p.y;
-      p.v.x = sp.v.x; p.v.y = sp.v.y;
+      p.active=sp.active;
+      p.p.x=sp.p.x; p.p.y=sp.p.y;
+      p.v.x=sp.v.x; p.v.y=sp.v.y;
     }
 
-    // Clear aiming if it points to an invalid peg
     if(this.input.selectedPegObj && !this.input.selectedPegObj.active){
-      this.input.selectedPegObj = null;
-      this.input.selectedPeg = null;
+      this.input.selectedPegObj=null;
+      this.input.selectedPeg=null;
     }
 
-    // Clear effects that could be stale
-    this.effects.goalBannerUntil = 0;
-    this.effects.goalRipple = null;
-    this.effects.goalPauseUntil = 0;
+    this.effects.goalBannerUntil=0;
+    this.effects.goalRipple=null;
+    this.effects.goalPauseUntil=0;
 
     this.updateHUD();
   }
 
   undo(){
     if(!this.undoSnapshot) return;
-    if(this.state.phase === 'simulating' || this.state.phase === 'paused') return;
+    if(this.state.phase==='simulating' || this.state.phase==='paused') return;
     this.applySnapshot(this.undoSnapshot);
-    // One-level undo only: clear after applying
-    this.undoSnapshot = null;
+    this.undoSnapshot=null;
     this.updateHUD();
   }
 
-  /* ---------- Helpers ---------- */
-  getActiveBodies(){
-    const bodies = [this.ball, ...this.pegs.filter(p=>p.active)];
-    return bodies;
-  }
-
+  getActiveBodies(){ return [this.ball, ...this.pegs.filter(p=>p.active)]; }
   getRenderBodiesSorted(){
-    // Sort by y to fake depth (lower y behind, higher y in front)
-    const bodies = [this.ball, ...this.pegs.filter(p=>p.active)];
-    bodies.sort((a,b)=> (a.p.y - b.p.y));
+    const bodies=[this.ball, ...this.pegs.filter(p=>p.active)];
+    bodies.sort((a,b)=>a.p.y-b.p.y);
     return bodies;
   }
 
   pickPegAt(worldPos, team){
-    // pick nearest active peg of team under pointer
-    let best = null;
-    let bestD = Infinity;
+    let best=null, bestD=Infinity;
     for(const p of this.pegs){
-      if(!p.active) continue;
-      if(p.team !== team) continue;
-      const d = len(worldPos.x - p.p.x, worldPos.y - p.p.y);
-      if(d <= p.r && d < bestD){
-        bestD = d;
-        best = p;
-      }
+      if(!p.active || p.team!==team) continue;
+      const d=len(worldPos.x-p.p.x, worldPos.y-p.p.y);
+      if(d<=p.r && d<bestD){ bestD=d; best=p; }
     }
     return best;
   }
 
   allStopped(){
-    const bodies = this.getActiveBodies();
-    for(const b of bodies){
-      if(b.speed() > CONFIG.physics.stopSpeed) return false;
+    for(const b of this.getActiveBodies()){
+      if(b.speed()>CONFIG.physics.stopSpeed) return false;
     }
     return true;
   }
 
-  /* ---------- Gameplay ---------- */
   tryFlick(peg, dir, impulse){
-    if(this.state.phase !== 'ready') return;
-    if(!peg.active) return;
-    if(peg.team !== this.state.turn) return;
+    if(this.state.phase!=='ready') return;
+    if(!peg.active || peg.team!==this.state.turn) return;
 
-    // Snapshot before applying flick (undo)
-    this.undoSnapshot = this.makeSnapshot();
+    this.undoSnapshot=this.makeSnapshot();
 
-    // Apply impulse to the peg
     peg.v.x += dir.x * impulse / peg.mass;
     peg.v.y += dir.y * impulse / peg.mass;
 
-    // Start simulation
-    this.state.phase = 'simulating';
-    this.simStartMs = nowMs();
+    this.state.phase='simulating';
+    this.simStartMs=nowMs();
     this.updateHUD();
   }
 
   resetMatch(){
-    this.undoSnapshot = null;
+    this.undoSnapshot=null;
+    this.state={ turn:'A', scoreA:0, scoreB:0, removedA:0, removedB:0, phase:'ready', winner:null };
 
-    this.state.turn = 'A';
-    this.state.scoreA = 0;
-    this.state.scoreB = 0;
-    this.state.removedA = 0;
-    this.state.removedB = 0;
-    this.state.phase = 'ready';
-    this.state.winner = null;
+    this.ball.p.x=CONFIG.world.w/2; this.ball.p.y=CONFIG.world.h/2;
+    this.ball.v.x=0; this.ball.v.y=0; this.ball.active=true;
 
-    // Reset ball
-    this.ball.p.x = CONFIG.world.w/2;
-    this.ball.p.y = CONFIG.world.h/2;
-    this.ball.v.x = 0;
-    this.ball.v.y = 0;
-    this.ball.active = true;
-
-    // Reset pegs
     this.buildInitialTeams();
 
-    // Clear selection
-    this.input.selectedPeg = null;
-    this.input.selectedPegObj = null;
-    this.input.isAiming = false;
+    this.input.selectedPeg=null;
+    this.input.selectedPegObj=null;
+    this.input.isAiming=false;
 
-    // Clear effects
-    this.effects.goalBannerUntil = 0;
-    this.effects.goalRipple = null;
-    this.effects.goalPauseUntil = 0;
+    this.effects.goalBannerUntil=0;
+    this.effects.goalRipple=null;
+    this.effects.goalPauseUntil=0;
 
     this.updateHUD();
   }
 
-  checkGoal(){
-    // Goal when ball is fully beyond goal line within mouth opening
-    const W = CONFIG.world.w, H = CONFIG.world.h;
-    const open = CONFIG.goal.opening;
-    const yTop = (H - open)/2;
-    const yBot = yTop + open;
+  forceBallBackIfOut(){
+    const W=CONFIG.world.w, H=CONFIG.world.h;
+    const b=this.ball, r=b.r, e=CONFIG.physics.wallRestitution;
+    if(b.p.x-r<0){ b.p.x=r; b.v.x=Math.abs(b.v.x)*e; }
+    if(b.p.x+r>W){ b.p.x=W-r; b.v.x=-Math.abs(b.v.x)*e; }
+    if(b.p.y-r<0){ b.p.y=r; b.v.y=Math.abs(b.v.y)*e; }
+    if(b.p.y+r>H){ b.p.y=H-r; b.v.y=-Math.abs(b.v.y)*e; }
+  }
 
-    const b = this.ball;
-    const insideMouth = (b.p.y - b.r >= yTop) && (b.p.y + b.r <= yBot);
+  checkGoalCorridor(){
+    const W=CONFIG.world.w, H=CONFIG.world.h, open=CONFIG.goal.opening;
+    const yTop=(H-open)/2, yBot=yTop+open;
+    const b=this.ball;
+    const inMouth=(b.p.y>=yTop && b.p.y<=yBot);
 
-    // Left goal: ball fully left of x=0
-    if(insideMouth && (b.p.x + b.r < 0)){
-      return { side:'left', scorer:'B', conceded:'A' };
+    if(inMouth && (b.p.x + b.r < 0)) return { side:'left', scorer:'B', conceded:'A' };
+    if(inMouth && (b.p.x - b.r > W)) return { side:'right', scorer:'A', conceded:'B' };
+
+    if(b.p.x - b.r < 0){
+      if(!inMouth){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*CONFIG.physics.wallRestitution; }
+      else b.p.x -= Math.max(0, Math.abs(b.v.x))*CONFIG.physics.dt*1.1;
     }
-    // Right goal: ball fully right of x=W
-    if(insideMouth && (b.p.x - b.r > W)){
-      return { side:'right', scorer:'A', conceded:'B' };
+    if(b.p.x + b.r > W){
+      if(!inMouth){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*CONFIG.physics.wallRestitution; }
+      else b.p.x += Math.max(0, Math.abs(b.v.x))*CONFIG.physics.dt*1.1;
     }
+    if(b.p.y - b.r < 0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*CONFIG.physics.wallRestitution; }
+    if(b.p.y + b.r > H){ b.p.y=H-b.r; b.v.y=-Math.abs(b.v.y)*CONFIG.physics.wallRestitution; }
+
     return null;
   }
 
-  forceBallBackIfOut(){
-    // Keep ball in play unless it's a goal (goal checks rely on ball passing fully)
-    // If it goes out elsewhere, just bounce back slightly
-    const W = CONFIG.world.w, H = CONFIG.world.h;
-    const b = this.ball;
-    const r = b.r;
-    const e = CONFIG.physics.wallRestitution;
-
-    if(b.p.x - r < 0){ b.p.x = r; b.v.x = Math.abs(b.v.x)*e; }
-    if(b.p.x + r > W){ b.p.x = W-r; b.v.x = -Math.abs(b.v.x)*e; }
-    if(b.p.y - r < 0){ b.p.y = r; b.v.y = Math.abs(b.v.y)*e; }
-    if(b.p.y + r > H){ b.p.y = H-r; b.v.y = -Math.abs(b.v.y)*e; }
-  }
-
   applyGoal(goal){
-    // goal.scorer gets +1, conceded loses 1 peg (removed)
-    if(this.state.phase === 'gameover') return;
+    if(this.state.phase==='gameover') return;
 
-    if(goal.scorer === 'A') this.state.scoreA += 1;
-    else this.state.scoreB += 1;
+    if(goal.scorer==='A') this.state.scoreA+=1; else this.state.scoreB+=1;
+    if(goal.conceded==='A') this.state.removedA+=1; else this.state.removedB+=1;
 
-    if(goal.conceded === 'A') this.state.removedA += 1;
-    else this.state.removedB += 1;
-
-    // Remove one peg from conceded team: choose farthest from center (or last active), deterministic-ish
-    const concededTeam = goal.conceded;
-    const activeTeamPegs = this.pegs.filter(p => p.active && p.team === concededTeam);
-    if(activeTeamPegs.length > 0){
-      // Prefer remove the peg with smallest "influence" (furthest from ball) to keep play feel
-      let best = null;
-      let bestScore = -Infinity;
-      for(const p of activeTeamPegs){
-        const dBall = len(p.p.x - this.ball.p.x, p.p.y - this.ball.p.y);
-        const dCenter = len(p.p.x - CONFIG.world.w/2, p.p.y - CONFIG.world.h/2);
-        const score = dBall*0.6 + dCenter*0.4;
-        if(score > bestScore){ bestScore = score; best = p; }
+    const conceded=goal.conceded;
+    const teamPegs=this.pegs.filter(p=>p.active && p.team===conceded);
+    if(teamPegs.length){
+      let best=null, bestScore=-Infinity;
+      for(const p of teamPegs){
+        const dBall=len(p.p.x-this.ball.p.x, p.p.y-this.ball.p.y);
+        const dCenter=len(p.p.x-CONFIG.world.w/2, p.p.y-CONFIG.world.h/2);
+        const score=dBall*0.6 + dCenter*0.4;
+        if(score>bestScore){ bestScore=score; best=p; }
       }
-      best.active = false;
-      best.v.x = best.v.y = 0;
+      best.active=false;
+      best.v.x=best.v.y=0;
     }
 
-    // Effects
-    this.effects.goalBannerUntil = nowMs() + CONFIG.effects.goalBannerMs;
-    this.effects.goalRipple = { side: goal.side, t0: nowMs() };
-
-    // Sound
+    this.effects.goalBannerUntil=nowMs()+CONFIG.effects.goalBannerMs;
+    this.effects.goalRipple={ side: goal.side, t0: nowMs() };
     this.sound.goal();
 
-    // Check winner
-    if(this.state.scoreA >= 11 || this.state.scoreB >= 11){
-      this.state.phase = 'gameover';
-      this.state.winner = (this.state.scoreA >= 11) ? 'A' : 'B';
+    if(this.state.scoreA>=11 || this.state.scoreB>=11){
+      this.state.phase='gameover';
+      this.state.winner=(this.state.scoreA>=11)?'A':'B';
     }
 
-    // Reset ball + stop bodies, then pause briefly
     this.resetAfterGoal(goal.side);
   }
 
   resetAfterGoal(side){
-    // Stop everything
-    for(const b of this.getActiveBodies()){
-      b.v.x = 0; b.v.y = 0;
-    }
+    for(const b of this.getActiveBodies()){ b.v.x=0; b.v.y=0; }
+    this.ball.p.x=CONFIG.world.w/2; this.ball.p.y=CONFIG.world.h/2;
+    this.ball.p.x += (side==='left') ? 2 : -2;
 
-    // Place ball at center
-    this.ball.p.x = CONFIG.world.w/2;
-    this.ball.p.y = CONFIG.world.h/2;
-
-    // Small deterministic nudge to avoid immediate perfect repeats (still "no fault rule")
-    const nudge = (side === 'left') ? 1 : -1;
-    this.ball.p.x += nudge * 2;
-
-    // Pause, then set ready with next turn (turn changes regardless of scorer)
-    this.effects.goalPauseUntil = nowMs() + CONFIG.effects.goalPauseMs;
-    this.state.phase = 'paused';
+    this.effects.goalPauseUntil=nowMs()+CONFIG.effects.goalPauseMs;
+    this.state.phase='paused';
     this.switchTurn();
     this.updateHUD();
-
-    // Hide aim selection (optional) to reduce misclicks after reset
-    this.input.isAiming = false;
+    this.input.isAiming=false;
   }
 
-  switchTurn(){
-    this.state.turn = (this.state.turn === 'A') ? 'B' : 'A';
-  }
-
+  switchTurn(){ this.state.turn=(this.state.turn==='A')?'B':'A'; }
   finishTurn(){
-    if(this.state.phase === 'gameover') return;
-    this.state.phase = 'ready';
+    if(this.state.phase==='gameover') return;
+    this.state.phase='ready';
     this.switchTurn();
     this.updateHUD();
   }
 
-  /* ---------- Main Loop ---------- */
   loop(){
-    const t = nowMs();
-    const dtFrame = (t - this.lastFrameMs) / 1000;
-    this.lastFrameMs = t;
+    const t=nowMs();
+    const dtFrame=(t-this.lastFrameMs)/1000;
+    this.lastFrameMs=t;
 
-    // Cap to avoid huge steps after tab switch
-    const capped = Math.min(dtFrame, 0.05);
+    const capped=Math.min(dtFrame,0.05);
     this.acc += capped;
 
-    // Handle pause after goal
-    if(this.state.phase === 'paused'){
-      if(t >= this.effects.goalPauseUntil){
-        if(this.state.phase !== 'gameover'){
-          this.state.phase = 'ready';
-          this.updateHUD();
-        }
+    if(this.state.phase==='paused'){
+      if(t>=this.effects.goalPauseUntil){
+        if(this.state.phase!=='gameover'){ this.state.phase='ready'; this.updateHUD(); }
       }
     }
 
-    // Simulate if needed
-    if(this.state.phase === 'simulating'){
-      let steps = 0;
-      const fixed = CONFIG.physics.dt;
+    if(this.state.phase==='simulating'){
+      let steps=0;
+      const fixed=CONFIG.physics.dt;
 
-      while(this.acc >= fixed && steps < CONFIG.physics.maxSubStepsPerFrame){
+      while(this.acc>=fixed && steps<CONFIG.physics.maxSubStepsPerFrame){
         this.physics.step(fixed);
-
-        // Keep ball in bounds unless goal
         this.forceBallBackIfOut();
-
-        // Check goal (requires ball fully beyond line; but we clamp ball back above,
-        // so allow goal by checking *before* clamp in a real implementation).
-        // To keep goal possible, we instead allow ball to pass beyond by temporarily not clamping
-        // at goal mouths. We'll do a dedicated check using goal corridor and relax the clamp:
-        // Workaround: after step we check if ball is past left/right; if yes and within mouth -> goal,
-        // otherwise clamp back. We already clamped above, so do it in reverse:
-        // => We'll do proper check by re-evaluating using extended bounds prior to clamp:
-        // For stability, we implement special corridor allowance below:
         this.acc -= fixed;
         steps++;
       }
 
-      // Proper goal corridor allowance:
-      const goal = this.checkGoalCorridor();
+      const goal=this.checkGoalCorridor();
       if(goal){
         this.applyGoal(goal);
       } else {
-        // Turn ends if everything is slow or time max exceeded
-        const elapsed = (t - this.simStartMs) / 1000;
-        if(this.allStopped() || elapsed >= CONFIG.physics.sleepTimeMax){
-          // Stop everything gently to avoid micro drift
-          for(const b of this.getActiveBodies()){
-            b.v.x = 0; b.v.y = 0;
-          }
+        const elapsed=(t-this.simStartMs)/1000;
+        if(this.allStopped() || elapsed>=CONFIG.physics.sleepTimeMax){
+          for(const b of this.getActiveBodies()){ b.v.x=0; b.v.y=0; }
           this.finishTurn();
         }
       }
     }
 
-    // Goal banner show/hide
-    if(t < this.effects.goalBannerUntil){
-      this.ui.goalBanner.classList.add('show');
-    } else {
-      this.ui.goalBanner.classList.remove('show');
-    }
+    if(t<this.effects.goalBannerUntil) this.ui.goalBanner.classList.add('show');
+    else this.ui.goalBanner.classList.remove('show');
 
-    // Render
     this.renderer.draw();
 
-    // If game over, draw overlay text on canvas
-    if(this.state.phase === 'gameover'){
-      this.drawGameOverOverlay();
-    }
-
-    // Update HUD each frame only when needed; but keep undo enabled accurate
+    if(this.state.phase==='gameover') this.drawGameOverOverlay();
     this.updateHUD();
 
     requestAnimationFrame(()=>this.loop());
   }
 
-  checkGoalCorridor(){
-    // Allows ball to go beyond left/right ONLY if within goal mouth.
-    // Implement by checking ball position *without clamping*, so we temporarily allow
-    // x to go beyond [0,W] while still keeping physics stable. Here we approximate:
-    // If ball center is near walls and moving outward, permit it to pass and detect goal.
-
-    const W = CONFIG.world.w, H = CONFIG.world.h;
-    const open = CONFIG.goal.opening;
-    const yTop = (H - open)/2;
-    const yBot = yTop + open;
-    const b = this.ball;
-
-    const inMouth = (b.p.y >= yTop && b.p.y <= yBot);
-    // If in mouth, let it cross.
-    // Detect goal when full ball is outside.
-    if(inMouth && (b.p.x + b.r < 0)){
-      return { side:'left', scorer:'B', conceded:'A' };
-    }
-    if(inMouth && (b.p.x - b.r > W)){
-      return { side:'right', scorer:'A', conceded:'B' };
-    }
-
-    // If ball is in mouth corridor, loosen wall clamping so it can actually cross.
-    // We can't "unclamp" since we already clamp inside step; so we implement clamp
-    // that respects goal mouth: move it only if outside mouth.
-    if(b.p.x - b.r < 0){
-      if(!inMouth){
-        b.p.x = b.r;
-        b.v.x = Math.abs(b.v.x) * CONFIG.physics.wallRestitution;
-      } else {
-        // allow drift: push slightly out if it's trying to go out
-        b.p.x -= Math.max(0, Math.abs(b.v.x)) * CONFIG.physics.dt * 1.1;
-      }
-    }
-    if(b.p.x + b.r > W){
-      if(!inMouth){
-        b.p.x = W - b.r;
-        b.v.x = -Math.abs(b.v.x) * CONFIG.physics.wallRestitution;
-      } else {
-        b.p.x += Math.max(0, Math.abs(b.v.x)) * CONFIG.physics.dt * 1.1;
-      }
-    }
-
-    // top/bottom always clamp (no goals there)
-    if(b.p.y - b.r < 0){
-      b.p.y = b.r; b.v.y = Math.abs(b.v.y) * CONFIG.physics.wallRestitution;
-    }
-    if(b.p.y + b.r > H){
-      b.p.y = H - b.r; b.v.y = -Math.abs(b.v.y) * CONFIG.physics.wallRestitution;
-    }
-
-    return null;
-  }
-
   drawGameOverOverlay(){
-    const ctx = this.renderer.ctx;
-    const w = this.canvas.width, h = this.canvas.height;
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-
+    const ctx=this.renderer.ctx;
+    const w=this.canvas.width, h=this.canvas.height;
+    const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.fillStyle='rgba(0,0,0,.35)';
     ctx.fillRect(0,0,w,h);
 
-    const text = (this.state.winner === 'A') ? '¡GANA EQUIPO A!' : '¡GANA EQUIPO B!';
-    ctx.font = `900 ${Math.floor(54*dpr)}px ui-sans-serif,system-ui`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(255,255,255,.92)';
-    ctx.shadowColor = 'rgba(0,0,0,.45)';
-    ctx.shadowBlur = 18*dpr;
-    ctx.fillText(text, w/2, h/2 - 22*dpr);
+    const text=(this.state.winner==='A')?'¡GANA EQUIPO A!':'¡GANA EQUIPO B!';
+    ctx.font=`900 ${Math.floor(54*dpr)}px ui-sans-serif,system-ui`;
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(255,255,255,.92)';
+    ctx.shadowColor='rgba(0,0,0,.45)';
+    ctx.shadowBlur=18*dpr;
+    ctx.fillText(text,w/2,h/2-22*dpr);
 
-    ctx.shadowBlur = 0;
-    ctx.font = `700 ${Math.floor(16*dpr)}px ui-sans-serif,system-ui`;
-    ctx.fillStyle = 'rgba(234,240,255,.85)';
-    ctx.fillText('Pulsa “Reiniciar partido” para jugar otra vez.', w/2, h/2 + 28*dpr);
+    ctx.shadowBlur=0;
+    ctx.font=`700 ${Math.floor(16*dpr)}px ui-sans-serif,system-ui`;
+    ctx.fillStyle='rgba(234,240,255,.85)';
+    ctx.fillText('Pulsa “Reiniciar partido” para jugar otra vez.',w/2,h/2+28*dpr);
 
     ctx.restore();
   }
 }
 
-/* =========================
-   Boot
-========================= */
-const canvas = document.getElementById('game');
-const game = new Game(canvas);
-
-/* =========================
-   Notes:
-   - This implementation uses circular pegs + ball for stable collisions.
-   - The goal corridor logic slightly relaxes wall clamping near the goal mouth
-     to allow "fully crossing" goals while maintaining stability elsewhere.
-========================= */
+const canvas=document.getElementById('game');
+const game=new Game(canvas);
 
 /*
 ============================================================
 CÓMO JUGAR
 ============================================================
 - Turnos alternos: Equipo A y Equipo B.
-- En tu turno: click sobre uno de tus palitos (rojo o azul) para seleccionarlo.
+- En tu turno: click sobre uno de tus palitos para seleccionarlo.
 - Mantén pulsado y arrastra para apuntar y definir potencia.
-- Suelta para chutar (el impulso se aplica en sentido contrario al arrastre, tipo tirachinas).
-- El turno termina cuando todo se detiene, hay gol o se alcanza el tiempo máximo de simulación.
-- Gol: la bola entra completamente en la portería rival (izquierda/derecha, dentro de la boca).
+- Suelta para chutar (tirachinas).
+- El turno termina cuando todo se detiene, hay gol o se alcanza el tiempo máximo.
+- Gol: la bola entra completamente en la portería rival.
   El equipo que encaja retira 1 palito y el rival suma 1 al marcador.
 - Gana quien llegue a 11 goles.
 
 ============================================================
-PARÁMETROS RECOMENDADOS PARA AJUSTAR (CONFIG)
+PARÁMETROS RECOMENDADOS (CONFIG)
 ============================================================
-- CONFIG.flick.maxImpulse: fuerza máxima del tiro (más alto = tiros más fuertes).
-- CONFIG.flick.maxDrag: distancia máxima de arrastre (sensibilidad del control).
-- CONFIG.physics.wallRestitution: rebote en paredes (0.7–0.9 típico).
-- CONFIG.ball.linearDamp / CONFIG.peg.linearDamp: fricción/air damping (más bajo = se detiene antes).
-- CONFIG.physics.stopSpeed: umbral para considerar “parado” (sube si cuesta terminar turnos).
-- CONFIG.goal.opening: tamaño de la boca de la portería.
-- CONFIG.ball.r y CONFIG.peg.r: tamaños relativos (ajustan dificultad y colisiones).
+- CONFIG.flick.maxImpulse: fuerza máxima.
+- CONFIG.flick.maxDrag: distancia máxima de arrastre.
+- CONFIG.physics.wallRestitution: rebote.
+- CONFIG.ball.linearDamp / CONFIG.peg.linearDamp: fricción.
+- CONFIG.physics.stopSpeed: umbral de parada.
+- CONFIG.goal.opening: boca de la portería.
 */
 </script>
 </body>
