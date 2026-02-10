@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PLAKKS-like Flick Soccer (Ball Flick)</title>
+  <title>PLAKKS-like Flick Soccer (Static Pegs)</title>
   <style>
     html,body{height:100%;margin:0;background:#0b1220;color:#eaf0ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
     .wrap{height:100%;display:flex;flex-direction:column;padding:12px;gap:10px;max-width:1200px;margin:0 auto;}
@@ -24,8 +24,8 @@
     }
     .teamTag{display:flex;align-items:center;gap:8px;font-weight:900;font-size:12px}
     .dot{width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,.06)}
-    .dotA{background:#4da3ff} /* A azul */
-    .dotB{background:#ff6b6b} /* B rojo */
+    .dotA{background:#4da3ff}
+    .dotB{background:#ff6b6b}
     .scoreNum{font-weight:1000;font-size:20px;letter-spacing:.6px}
     .turn{
       padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.10);
@@ -53,15 +53,11 @@
     .note{
       position:absolute;left:12px;bottom:10px;z-index:5;
       padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.30);
-      border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.35;max-width:min(560px,calc(100% - 24px));
+      border:1px solid rgba(255,255,255,.10);font-size:12px;line-height:1.35;max-width:min(690px,calc(100% - 24px));
       color:rgba(234,240,255,.8)
     }
     .note b{color:#fff}
-    .dbg{
-      position:absolute;left:12px;top:12px;z-index:10;padding:8px 10px;border-radius:12px;
-      background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.12);font:800 12px/1.35 system-ui;
-      display:none;
-    }
+
     .goalBanner{
       position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;
       opacity:0;transition:opacity .18s ease;z-index:8;
@@ -74,6 +70,7 @@
       transform:translateY(10px) scale(.98);transition:transform .18s ease;
     }
     .goalBanner.show .goalText{transform:translateY(0) scale(1)}
+
     .modalBack{
       position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:50;
     }
@@ -87,6 +84,26 @@
     .modal p,.modal li{font-size:13px;line-height:1.45;color:rgba(234,240,255,.85)}
     .modal ul{margin:8px 0 0 18px}
     .modal .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;padding:0;border:0;background:none;box-shadow:none}
+
+    /* Overlay para elegir esquina */
+    .overlay{
+      position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:20;
+      background:rgba(0,0,0,.45);
+      backdrop-filter: blur(4px);
+    }
+    .overlay.show{display:flex}
+    .panel{
+      width:min(520px,calc(100% - 24px));
+      border-radius:16px;border:1px solid rgba(255,255,255,.14);
+      background:rgba(15,26,47,.94);
+      box-shadow:0 26px 90px rgba(0,0,0,.55);
+      padding:14px;
+    }
+    .panel h3{margin:0 0 6px;font-size:15px}
+    .panel p{margin:0 0 12px;font-size:13px;line-height:1.4;color:rgba(234,240,255,.82)}
+    .choiceRow{display:flex;gap:10px;flex-wrap:wrap}
+    .choiceRow button{flex:1;min-width:150px}
+    .hint{margin-top:10px;font-size:12px;color:rgba(234,240,255,.70)}
     @media(max-width:720px){
       .top{flex-direction:column;align-items:stretch}
       .btnRow button{flex:1}
@@ -98,8 +115,8 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <div class="title">PLAKKS-like Flick Soccer <span class="badge">ball flick</span></div>
-      <div class="sub">Chutas la bola · Los palitos de ambos equipos estorban · Gol = quitas 1 palito al rival</div>
+      <div class="title">PLAKKS-like Flick Soccer <span class="badge">pegs fijos</span></div>
+      <div class="sub">Chutas la bola · Palitos fijos como obstáculos · Gol = quitas 1 palito al rival (al borde)</div>
     </div>
     <div class="hud">
       <div class="score" aria-label="Marcador">
@@ -120,11 +137,24 @@
 
   <div class="shell" id="shell">
     <canvas id="c"></canvas>
-    <div class="dbg" id="dbg"></div>
     <div class="goalBanner" id="goalBanner"><div class="goalText">GOOOL</div></div>
+
+    <!-- Overlay: elegir esquina tras gol -->
+    <div class="overlay" id="cornerOverlay">
+      <div class="panel">
+        <h3 id="cornerTitle">Elige esquina para sacar</h3>
+        <p id="cornerDesc">El equipo que recibió el gol saca ahora. Elige una de tus dos esquinas.</p>
+        <div class="choiceRow">
+          <button id="cornerTop" class="secondary">Esquina superior</button>
+          <button id="cornerBottom" class="secondary">Esquina inferior</button>
+        </div>
+        <div class="hint">Después del saque, la bola se juega desde donde se quede.</div>
+      </div>
+    </div>
+
     <div class="note">
-      <b>Cómo chutar:</b> toca/click en la <b>bola</b> → arrastra para marcar <b>dirección</b> y <b>potencia</b> → suelta.<br/>
-      <span style="opacity:.9">El saque sale desde una esquina de tu campo (se elige aleatoria). Los palitos de tu equipo también estorban.</span>
+      <b>Cómo chutar:</b> click/toca la <b>bola</b> → arrastra para dirección y potencia → suelta.<br/>
+      <span style="opacity:.9">Saque inicial desde esquina del equipo inicial. Tras gol: el equipo que encaja elige esquina para sacar.</span>
     </div>
   </div>
 </div>
@@ -135,14 +165,15 @@
       <h2 id="helpTitle">Ayuda · Reglas y controles</h2>
       <button id="closeHelp">Cerrar</button>
     </div>
-    <p><b>Objetivo:</b> meter gol con la bola. Los palitos (de ambos equipos) hacen de obstáculos.</p>
     <ul>
       <li><b>Turnos:</b> alternan A/B. En tu turno haces <b>un</b> chute con la <b>bola</b>.</li>
-      <li><b>Saque:</b> en tu turno, la bola aparece en <b>una esquina de tu campo</b> (aleatoria).</li>
-      <li><b>Control:</b> selecciona la bola → arrastra en la dirección del tiro (potencia = distancia) → suelta.</li>
-      <li><b>Gol:</b> si la bola entra completamente en la portería rival.</li>
-      <li><b>Al gol:</b> se quita 1 palito del equipo que encaja y se deja apoyado en el borde (visible).</li>
-      <li><b>Gana:</b> quien llega a 11 goles (deja al rival sin palitos).</li>
+      <li><b>Palitos:</b> son <b>fijos</b> (no se mueven). Solo se quitan cuando hay gol.</li>
+      <li><b>Saque inicial:</b> bola en una esquina del equipo inicial.</li>
+      <li><b>Tras gol:</b> saca el equipo que recibió el gol y <b>elige</b> esquina superior/inferior.</li>
+      <li><b>Juego continuo:</b> si no hay gol, la bola se juega desde donde quede.</li>
+      <li><b>Gol:</b> la bola entra completamente en la portería rival.</li>
+      <li><b>Al gol:</b> se quita 1 palito del equipo que encaja y se apoya en el borde (visible).</li>
+      <li><b>Gana:</b> quien llegue a 11 goles.</li>
     </ul>
   </div>
 </div>
@@ -150,32 +181,23 @@
 <script>
 (() => {
   /* =========================
-     CONFIG (ajustable)
+     CONFIG
   ========================= */
   const CONFIG = {
-    debug: { enabled: false },
-
     world: { w: 1200, h: 720 },
-
     goal: { opening: 220, depth: 46, postRadius: 10 },
 
     ball: { r: 16, mass: 1.0, restitution: 0.90, damp: 0.994, maxSpeed: 2600 },
-
-    peg:  { r: 24, mass: 5.0, restitution: 0.55, damp: 0.992, maxSpeed: 2200 },
+    peg:  { r: 24, restitution: 0.55 }, // pegs fijos
 
     teams: { count: 11 },
 
-    shot: {
-      maxDrag: 210,        // píxeles CSS aprox (se escala con dpr internamente)
-      minImpulse: 280,
-      maxImpulse: 2200,
-      aimLineW: 3
-    },
+    shot: { maxDrag: 210, minImpulse: 280, maxImpulse: 2200, aimLineW: 3 },
 
     physics: {
       dt: 1/120,
       maxSubStepsPerFrame: 10,
-      solverIterations: 5,
+      solverIterations: 2,
       wallRestitution: 0.86,
       stopSpeed: 14,
       maxSimSeconds: 4.0,
@@ -190,26 +212,22 @@
       shadowOffset: { x: 10, y: 14 },
       shadowBlur: 16,
       vignette: true,
-
-      removed: {
-        // palitos retirados se apoyan en el borde (izq para A, der para B)
-        scale: 0.72,
-        alpha: 0.68,
-        pad: 10,
-        gap: 8,
-      }
+      removed: { scale: 0.72, alpha: 0.68, pad: 10, gap: 8 },
     },
 
     effects: { goalBannerMs: 850, goalPauseMs: 520 },
+
+    // Tras gol NO recolocamos automáticamente: el equipo que encaja elige esquina.
+    cornerMargin: 52,
   };
 
   /* =========================
      Utils
   ========================= */
-  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
-  const lerp = (a,b,t) => a + (b-a)*t;
-  const hypot = (x,y) => Math.hypot(x,y);
-  const nowMs = () => performance.now();
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const lerp = (a,b,t)=>a+(b-a)*t;
+  const hypot = (x,y)=>Math.hypot(x,y);
+  const nowMs = ()=>performance.now();
   const rand = (a,b)=>a+Math.random()*(b-a);
 
   class Vec2{
@@ -221,123 +239,92 @@
     static mul(a,s){return new Vec2(a.x*s,a.y*s);}
   }
 
-  class Body{
-    constructor(x,y,r,mass){
+  class Ball{
+    constructor(x,y){
       this.p=new Vec2(x,y);
       this.v=new Vec2(0,0);
-      this.r=r;
-      this.mass=mass;
-      this.invMass=mass>0?1/mass:0;
-      this.restitution=0.8;
-      this.damp=0.995;
-      this.maxSpeed=2000;
-      this.active=true;
-    }
-    speed(){return this.v.mag();}
-  }
-
-  class Ball extends Body{
-    constructor(x,y){
-      super(x,y,CONFIG.ball.r,CONFIG.ball.mass);
+      this.r=CONFIG.ball.r;
+      this.mass=CONFIG.ball.mass;
       this.restitution=CONFIG.ball.restitution;
       this.damp=CONFIG.ball.damp;
       this.maxSpeed=CONFIG.ball.maxSpeed;
     }
+    speed(){return this.v.mag();}
   }
 
-  class Peg extends Body{
+  class Peg{
     constructor(x,y,team,id){
-      super(x,y,CONFIG.peg.r,CONFIG.peg.mass);
+      this.p=new Vec2(x,y);
+      this.r=CONFIG.peg.r;
       this.team=team;
       this.id=id;
-      this.restitution=CONFIG.peg.restitution;
-      this.damp=CONFIG.peg.damp;
-      this.maxSpeed=CONFIG.peg.maxSpeed;
+      this.active=true;
     }
   }
 
   class Physics{
     constructor(game){this.game=game;}
     step(dt){
-      const bodies=this.game.getActiveBodies();
       const W=CONFIG.world.w, H=CONFIG.world.h;
+      const b=this.game.ball;
 
-      for(const b of bodies){
-        b.p.x += b.v.x*dt;
-        b.p.y += b.v.y*dt;
+      b.p.x += b.v.x*dt;
+      b.p.y += b.v.y*dt;
 
-        b.v.mul(b.damp);
+      b.v.mul(b.damp);
 
-        const s=b.speed();
-        if(s>b.maxSpeed){
-          const k=b.maxSpeed/(s+1e-9);
-          b.v.mul(k);
-        }
-
-        const e=CONFIG.physics.wallRestitution;
-
-        // Rebotes en límites del campo (la "salida" por portería se detecta aparte)
-        if(b.p.x-b.r<0){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e; }
-        if(b.p.x+b.r>W){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e; }
-        if(b.p.y-b.r<0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*e; }
-        if(b.p.y+b.r>H){ b.p.y=H-b.r; b.v.y=-Math.abs(b.v.y)*e; }
+      const s=b.speed();
+      if(s>b.maxSpeed){
+        const k=b.maxSpeed/(s+1e-9);
+        b.v.mul(k);
       }
 
+      const e=CONFIG.physics.wallRestitution;
+
+      if(b.p.x-b.r<0){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e; }
+      if(b.p.x+b.r>W){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e; }
+      if(b.p.y-b.r<0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*e; }
+      if(b.p.y+b.r>H){ b.p.y=H-b.r; b.v.y=-Math.abs(b.v.y)*e; }
+
       for(let it=0; it<CONFIG.physics.solverIterations; it++){
-        for(let i=0;i<bodies.length;i++){
-          for(let j=i+1;j<bodies.length;j++){
-            this.resolveCircles(bodies[i], bodies[j]);
-          }
+        for(const p of this.game.pegs){
+          if(!p.active) continue;
+          this.resolveBallPeg(b,p);
         }
       }
     }
 
-    resolveCircles(a,b){
-      if(!a.active || !b.active) return;
-
-      const n=Vec2.sub(b.p,a.p);
+    resolveBallPeg(ball, peg){
+      const n=Vec2.sub(ball.p, peg.p);
       let dist=n.mag();
-      const r=a.r+b.r;
+      const r=ball.r+peg.r;
       if(dist<=0) dist=0.0001;
 
       if(dist<r){
         const penetration=r-dist;
         const normal=n.mul(1/dist);
-        const invMassSum=a.invMass+b.invMass;
-        if(invMassSum<=0) return;
 
-        // corrección penetración
         const slop=CONFIG.physics.penetrationSlop;
         const percent=CONFIG.physics.penetrationPercent;
-        const corr=Math.max(penetration-slop,0)/invMassSum*percent;
+        const corr=Math.max(penetration-slop,0)*percent;
 
-        a.p.x -= normal.x*corr*a.invMass;
-        a.p.y -= normal.y*corr*a.invMass;
-        b.p.x += normal.x*corr*b.invMass;
-        b.p.y += normal.y*corr*b.invMass;
+        ball.p.x += normal.x*corr;
+        ball.p.y += normal.y*corr;
 
-        // impulso
-        const rv=new Vec2(b.v.x-a.v.x, b.v.y-a.v.y);
-        const velAlongNormal=rv.dot(normal);
+        const v = ball.v;
+        const velAlong = v.dot(normal);
 
-        if(velAlongNormal<0){
-          const e=Math.min(a.restitution,b.restitution);
-          let j=-(1+e)*velAlongNormal;
-          j/=invMassSum;
+        if(velAlong<0){
+          const e = Math.min(ball.restitution, CONFIG.peg.restitution);
+          ball.v.x = v.x - (1+e)*velAlong*normal.x;
+          ball.v.y = v.y - (1+e)*velAlong*normal.y;
 
-          const imp=Vec2.mul(normal,j);
-          a.v.x -= imp.x*a.invMass; a.v.y -= imp.y*a.invMass;
-          b.v.x += imp.x*b.invMass; b.v.y += imp.y*b.invMass;
-
-          // fricción tangencial pequeña
-          const tangent=new Vec2(rv.x-velAlongNormal*normal.x, rv.y-velAlongNormal*normal.y);
+          const tangent=new Vec2(v.x-velAlong*normal.x, v.y-velAlong*normal.y);
           const tmag=tangent.mag();
           if(tmag>1e-6){
             tangent.mul(1/tmag);
-            const jt=-rv.dot(tangent)*0.025;
-            const timp=Vec2.mul(tangent,jt);
-            a.v.x -= timp.x*a.invMass; a.v.y -= timp.y*a.invMass;
-            b.v.x += timp.x*b.invMass; b.v.y += timp.y*b.invMass;
+            ball.v.x -= tangent.x*4.0;
+            ball.v.y -= tangent.y*4.0;
           }
         }
       }
@@ -346,9 +333,7 @@
 
   class Renderer{
     constructor(game,canvas,shell){
-      this.game=game;
-      this.canvas=canvas;
-      this.shell=shell;
+      this.game=game; this.canvas=canvas; this.shell=shell;
       this.ctx=canvas.getContext('2d');
 
       this.noise=document.createElement('canvas');
@@ -356,9 +341,7 @@
       this.noiseCtx=this.noise.getContext('2d');
       this.buildNoise();
 
-      this.scale=1;
-      this.ox=0; this.oy=0;
-      this.w=0; this.h=0; this.dpr=1;
+      this.scale=1; this.ox=0; this.oy=0; this.w=0; this.h=0; this.dpr=1;
     }
 
     buildNoise(){
@@ -378,22 +361,16 @@
       const r=this.shell.getBoundingClientRect();
       const cssW=Math.max(300, r.width||900);
       const cssH=Math.max(300, r.height||540);
-
       const w=Math.floor(cssW*dpr);
       const h=Math.floor(cssH*dpr);
-
-      if(this.canvas.width!==w || this.canvas.height!==h){
-        this.canvas.width=w; this.canvas.height=h;
-      }
+      if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;}
 
       const pad=CONFIG.render.pitchMargin*dpr;
       const sx=(w-pad*2)/CONFIG.world.w;
       const sy=(h-pad*2)/CONFIG.world.h;
       const scale=Math.max(0.0001, Math.min(sx,sy));
 
-      this.dpr=dpr;
-      this.w=w; this.h=h;
-      this.scale=scale;
+      this.dpr=dpr; this.w=w; this.h=h; this.scale=scale;
       this.ox=(w-CONFIG.world.w*scale)*0.5;
       this.oy=(h-CONFIG.world.h*scale)*0.5;
     }
@@ -550,46 +527,8 @@
       ctx.restore();
     }
 
-    drawBall(ball, selected){
-      const ctx=this.ctx;
-      const p=this.w2s(ball.p);
-      const r=ball.r*this.scale;
-
-      this.drawShadowAt(p.x,p.y,r,0.40);
-
-      ctx.save();
-      const g=ctx.createRadialGradient(p.x-r*0.35,p.y-r*0.35,r*0.35,p.x,p.y,r*1.15);
-      g.addColorStop(0,'rgba(255,255,255,.98)');
-      g.addColorStop(0.35,'rgba(255,255,255,.92)');
-      g.addColorStop(0.7,'rgba(220,230,255,.88)');
-      g.addColorStop(1,'rgba(140,160,190,.85)');
-      ctx.fillStyle=g;
-      ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
-      ctx.strokeStyle='rgba(0,0,0,.18)';
-      ctx.lineWidth=1.3*this.dpr;
-      ctx.stroke();
-
-      ctx.globalAlpha=0.55;
-      ctx.fillStyle='rgba(255,255,255,.85)';
-      ctx.beginPath();
-      ctx.ellipse(p.x-r*0.25,p.y-r*0.35,r*0.35,r*0.25,-0.6,0,Math.PI*2);
-      ctx.fill();
-
-      if(selected){
-        ctx.globalAlpha=1;
-        ctx.strokeStyle='rgba(125,211,252,.95)';
-        ctx.lineWidth=3*this.dpr;
-        ctx.beginPath();
-        ctx.arc(p.x,p.y,r+4*this.dpr,0,Math.PI*2);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    }
-
     drawPegScreen(x,y,rScreen,team,dimmed=false,alpha=1){
       const ctx=this.ctx;
-      // A azul (como foto), B rojo
       const base=(team==='A')?{a:'#4da3ff',b:'#124fae'}:{a:'#ff6b6b',b:'#b81f3d'};
 
       ctx.save();
@@ -636,13 +575,49 @@
       this.drawPegScreen(p.x,p.y,r,peg.team,false,1);
     }
 
+    drawBall(ball, selected){
+      const ctx=this.ctx;
+      const p=this.w2s(ball.p);
+      const r=ball.r*this.scale;
+
+      this.drawShadowAt(p.x,p.y,r,0.40);
+
+      ctx.save();
+      const g=ctx.createRadialGradient(p.x-r*0.35,p.y-r*0.35,r*0.35,p.x,p.y,r*1.15);
+      g.addColorStop(0,'rgba(255,255,255,.98)');
+      g.addColorStop(0.35,'rgba(255,255,255,.92)');
+      g.addColorStop(0.7,'rgba(220,230,255,.88)');
+      g.addColorStop(1,'rgba(140,160,190,.85)');
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,.18)';
+      ctx.lineWidth=1.3*this.dpr;
+      ctx.stroke();
+
+      ctx.globalAlpha=0.55;
+      ctx.fillStyle='rgba(255,255,255,.85)';
+      ctx.beginPath();
+      ctx.ellipse(p.x-r*0.25,p.y-r*0.35,r*0.35,r*0.25,-0.6,0,Math.PI*2);
+      ctx.fill();
+
+      if(selected){
+        ctx.globalAlpha=1;
+        ctx.strokeStyle='rgba(125,211,252,.95)';
+        ctx.lineWidth=3*this.dpr;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,r+4*this.dpr,0,Math.PI*2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     drawAim(input){
       if(!input.aiming || !input.ballSelected) return;
       const ctx=this.ctx;
-
       const ball=this.game.ball;
       const bp=this.w2s(ball.p);
       const m=input.mouse;
+
       const dx=m.x-bp.x, dy=m.y-bp.y;
       const dist=Math.hypot(dx,dy);
 
@@ -657,7 +632,6 @@
       ctx.shadowColor='rgba(0,0,0,.35)';
       ctx.shadowBlur=10*this.dpr;
 
-      // línea hacia el punto de arrastre (dirección del tiro)
       const k=(dist>1e-6)?(clamped/dist):0;
       const ex=bp.x+dx*k, ey=bp.y+dy*k;
 
@@ -666,7 +640,6 @@
       ctx.lineTo(ex,ey);
       ctx.stroke();
 
-      // flecha
       const ang=Math.atan2(dy,dx);
       const ah=10*this.dpr;
       ctx.beginPath();
@@ -677,7 +650,6 @@
       ctx.fillStyle=`rgba(125,211,252,${0.25+0.60*t})`;
       ctx.fill();
 
-      // barra potencia
       const bw=190*this.dpr, bh=10*this.dpr;
       const bx=this.ox+14*this.dpr, by=this.oy+(CONFIG.world.h*this.scale)-20*this.dpr;
       ctx.shadowBlur=0;
@@ -700,7 +672,7 @@
       const pad=remCfg.pad*this.dpr;
       const gap=remCfg.gap*this.dpr;
 
-      const leftEdge = this.ox; // borde del césped
+      const leftEdge = this.ox;
       const rightEdge = this.ox + CONFIG.world.w*this.scale;
 
       const listA = this.game.pegs.filter(p=>!p.active && p.team==='A');
@@ -710,34 +682,16 @@
       const r = Math.max(6*this.dpr, rNormal*remCfg.scale);
       const step = (2*r + gap);
 
-      // Apoyados en el "borde" (madera): fuera del césped, pero cerca.
       const xA = Math.max(pad + r, leftEdge - (r + 10*this.dpr));
       const xB = Math.min(this.w - (pad + r), rightEdge + (r + 10*this.dpr));
-
       const startY = pad + 30*this.dpr;
 
       const drawStack = (team, list, x) => {
         for(let i=0;i<list.length;i++){
           const y = startY + i*step;
           if(y + r > this.h - pad) break;
-
           this.drawShadowAt(x,y,r,0.18);
           this.drawPegScreen(x,y,r,team,true,remCfg.alpha);
-        }
-
-        // contador si no caben
-        const max = Math.floor((this.h - (startY+pad)) / step);
-        if(list.length > max){
-          const ctx=this.ctx;
-          ctx.save();
-          ctx.fillStyle='rgba(0,0,0,.35)';
-          this.roundRect(x - 22*this.dpr, this.h - (pad+22*this.dpr), 44*this.dpr, 22*this.dpr, 8*this.dpr);
-          ctx.fill();
-          ctx.fillStyle='rgba(234,240,255,.9)';
-          ctx.font=`${Math.floor(12*this.dpr)}px system-ui`;
-          ctx.textAlign='center'; ctx.textBaseline='middle';
-          ctx.fillText(`+${list.length-max}`, x, this.h - (pad+11*this.dpr));
-          ctx.restore();
         }
       };
 
@@ -766,39 +720,21 @@
       this.drawPitch();
       this.drawGoals();
 
-      // Orden por Y para pseudo-3D
-      const bodies=[...this.game.pegs.filter(p=>p.active), this.game.ball];
-      bodies.sort((a,b)=>a.p.y-b.p.y);
-
-      for(const b of bodies){
-        if(b instanceof Ball) continue;
-        this.drawPeg(b);
+      for(const p of this.game.pegs){
+        if(p.active) this.drawPeg(p);
       }
 
       this.drawBall(this.game.ball, this.game.input.ballSelected);
 
-      // Palitos retirados apoyados en el borde
       this.drawRemovedOnBorders();
-
-      // Aim UI
       this.drawAim(this.game.input);
-
       this.drawVignette();
-
-      if(CONFIG.debug.enabled){
-        const dbg=this.game.ui.dbg;
-        dbg.style.display='block';
-        dbg.textContent=`scale ${this.scale.toFixed(4)} dpr ${this.dpr.toFixed(2)} phase ${this.game.phase}`;
-      }
     }
   }
 
   class Input{
     constructor(game,canvas,renderer){
-      this.game=game;
-      this.canvas=canvas;
-      this.r=renderer;
-
+      this.game=game; this.canvas=canvas; this.r=renderer;
       this.mouse={x:0,y:0};
       this.pointerDown=false;
       this.aiming=false;
@@ -821,11 +757,9 @@
       if(this.game.phase!=='ready') return;
       if(!this.game.canShootNow()) return;
 
-      this.canvas.setPointerCapture?.(e.pointerId);
       this.pointerDown=true;
       this.mouse=this.pos(e);
 
-      // Solo se puede seleccionar la bola
       const wpos=this.r.s2w(this.mouse);
       const b=this.game.ball;
       const d=hypot(wpos.x-b.p.x,wpos.y-b.p.y);
@@ -839,9 +773,7 @@
       }
     }
 
-    onMove(e){
-      this.mouse=this.pos(e);
-    }
+    onMove(e){ this.mouse=this.pos(e); }
 
     onUp(e){
       if(!this.pointerDown) return;
@@ -863,7 +795,7 @@
 
       if(clamped>3*this.r.dpr){
         const inv=1/(dist||1);
-        const dir={ x:dx*inv, y:dy*inv }; // dirección EXACTA del arrastre
+        const dir={ x:dx*inv, y:dy*inv };
         const impulse=lerp(CONFIG.shot.minImpulse, CONFIG.shot.maxImpulse, t);
         this.game.shootBall(dir,impulse);
       }
@@ -871,32 +803,32 @@
       this.aiming=false;
     }
 
-    resetSelection(){
-      this.aiming=false;
-      this.ballSelected=false;
-    }
+    resetSelection(){ this.aiming=false; this.ballSelected=false; }
   }
 
   class Game{
     constructor(canvas,shell){
-      this.canvas=canvas;
-      this.shell=shell;
+      this.canvas=canvas; this.shell=shell;
 
       this.ui={
         scoreA:document.getElementById('scoreA'),
         scoreB:document.getElementById('scoreB'),
         turnText:document.getElementById('turnText'),
         turnPill:document.getElementById('turnPill'),
-        goalBanner:document.getElementById('goalBanner'),
-        dbg:document.getElementById('dbg'),
         btnUndo:document.getElementById('undo'),
         btnReset:document.getElementById('reset'),
         btnHelp:document.getElementById('help'),
+        goalBanner:document.getElementById('goalBanner'),
+        cornerOverlay:document.getElementById('cornerOverlay'),
+        cornerTitle:document.getElementById('cornerTitle'),
+        cornerDesc:document.getElementById('cornerDesc'),
+        cornerTop:document.getElementById('cornerTop'),
+        cornerBottom:document.getElementById('cornerBottom'),
       };
 
       this.scoreA=0; this.scoreB=0;
-      this.turn = (Math.random()<0.5)?'A':'B'; // ✅ turno inicial aleatorio
-      this.phase='ready'; // ready | sim | paused | gameover
+      this.turn = (Math.random()<0.5)?'A':'B';
+      this.phase='ready'; // ready | sim | paused | waitingCorner | gameover
       this.winner=null;
 
       this.ball=new Ball(CONFIG.world.w/2, CONFIG.world.h/2);
@@ -913,14 +845,16 @@
       this.pauseUntil=0;
       this.simStartMs=0;
 
+      this.pendingCornerTeam=null; // equipo que debe elegir esquina
+
       this.acc=0;
       this.last=nowMs();
 
       this.bindUI();
       this.updateHUD();
 
-      // Colocar bola en esquina del que saca
-      this.placeBallForTurn();
+      // Saque inicial: el equipo inicial elige esquina automáticamente aleatoria (solo inicio)
+      this.placeBallAtCornerForTeam(this.turn, Math.random()<0.5 ? 'top' : 'bottom');
 
       requestAnimationFrame(()=>this.loop());
     }
@@ -933,18 +867,17 @@
       document.getElementById('helpBack').addEventListener('click', (e)=>{
         if(e.target.id==='helpBack') document.getElementById('helpBack').classList.remove('show');
       });
+
+      this.ui.cornerTop.addEventListener('click', ()=>this.chooseCorner('top'));
+      this.ui.cornerBottom.addEventListener('click', ()=>this.chooseCorner('bottom'));
     }
 
-    // ✅ Disposición tipo la imagen (hardcode positions)
     buildFixedLayout(){
       this.pegs=[];
-
       const W=CONFIG.world.w, H=CONFIG.world.h;
 
-      // Coordenadas aproximadas a la foto: 11 por lado
-      // Team A (izquierda, azul)
       const A = [
-        [90, H*0.50],     // portero
+        [90, H*0.50],
         [220, H*0.20],
         [240, H*0.38],
         [240, H*0.62],
@@ -957,9 +890,8 @@
         [520, H*0.68],
       ];
 
-      // Team B (derecha, rojo)
       const B = [
-        [W-90, H*0.50],   // portero
+        [W-90, H*0.50],
         [W-220, H*0.20],
         [W-240, H*0.38],
         [W-240, H*0.62],
@@ -972,71 +904,58 @@
         [W-520, H*0.68],
       ];
 
-      for(let i=0;i<CONFIG.teams.count;i++){
-        const p=A[i];
-        this.pegs.push(new Peg(p[0],p[1],'A',`A${i}`));
-      }
-      for(let i=0;i<CONFIG.teams.count;i++){
-        const p=B[i];
-        this.pegs.push(new Peg(p[0],p[1],'B',`B${i}`));
-      }
+      for(let i=0;i<CONFIG.teams.count;i++) this.pegs.push(new Peg(A[i][0],A[i][1],'A',`A${i}`));
+      for(let i=0;i<CONFIG.teams.count;i++) this.pegs.push(new Peg(B[i][0],B[i][1],'B',`B${i}`));
 
-      // micro jitter para que no esté matemático
       for(const p of this.pegs){
         p.p.x += rand(-6,6);
         p.p.y += rand(-8,8);
       }
     }
 
-    getActiveBodies(){ return [this.ball, ...this.pegs.filter(p=>p.active)]; }
-
     updateHUD(){
       this.ui.scoreA.textContent=String(this.scoreA);
       this.ui.scoreB.textContent=String(this.scoreB);
       this.ui.turnText.textContent=(this.turn==='A')?'Equipo A':'Equipo B';
-      // A azul, B rojo
       this.ui.turnPill.style.background=(this.turn==='A')?'#4da3ff':'#ff6b6b';
+
+      // Deshabilitar undo si no toca
       this.ui.btnUndo.disabled = !this.undoSnap || this.phase!=='ready';
     }
 
     canShootNow(){
-      // Sólo se puede chutar si la bola está colocada y casi parada
-      return this.phase==='ready' && this.ball.speed() < 0.5;
+      return this.phase==='ready' && this.ball.speed()<0.5;
     }
 
     snapshot(){
       return {
-        turn:this.turn,
-        scoreA:this.scoreA, scoreB:this.scoreB,
+        turn:this.turn, scoreA:this.scoreA, scoreB:this.scoreB,
         phase:this.phase, winner:this.winner,
-        goalBannerUntil:this.goalBannerUntil,
-        pauseUntil:this.pauseUntil,
-        ball:{ p:{x:this.ball.p.x,y:this.ball.p.y}, v:{x:this.ball.v.x,y:this.ball.v.y}, active:this.ball.active },
-        pegs:this.pegs.map(p=>({ id:p.id, team:p.team, active:p.active, p:{x:p.p.x,y:p.p.y}, v:{x:p.v.x,y:p.v.y} })),
+        goalBannerUntil:this.goalBannerUntil, pauseUntil:this.pauseUntil,
+        pendingCornerTeam:this.pendingCornerTeam,
+        ball:{ p:{x:this.ball.p.x,y:this.ball.p.y}, v:{x:this.ball.v.x,y:this.ball.v.y} },
+        pegs:this.pegs.map(p=>({ id:p.id, team:p.team, active:p.active })),
       };
     }
 
     applySnapshot(s){
-      this.turn=s.turn;
-      this.scoreA=s.scoreA; this.scoreB=s.scoreB;
+      this.turn=s.turn; this.scoreA=s.scoreA; this.scoreB=s.scoreB;
       this.phase=s.phase; this.winner=s.winner;
       this.goalBannerUntil=s.goalBannerUntil||0;
       this.pauseUntil=s.pauseUntil||0;
+      this.pendingCornerTeam=s.pendingCornerTeam||null;
 
       this.ball.p.x=s.ball.p.x; this.ball.p.y=s.ball.p.y;
       this.ball.v.x=s.ball.v.x; this.ball.v.y=s.ball.v.y;
-      this.ball.active=s.ball.active;
 
       const map=new Map(this.pegs.map(p=>[p.id,p]));
       for(const sp of s.pegs){
         const p=map.get(sp.id);
-        if(!p) continue;
-        p.active=sp.active;
-        p.p.x=sp.p.x; p.p.y=sp.p.y;
-        p.v.x=sp.v.x; p.v.y=sp.v.y;
+        if(p) p.active=sp.active;
       }
 
       this.input.resetSelection();
+      this.setCornerOverlay(this.phase==='waitingCorner');
       this.updateHUD();
     }
 
@@ -1050,54 +969,44 @@
 
     reset(){
       this.scoreA=0; this.scoreB=0;
-      this.turn = (Math.random()<0.5)?'A':'B';
-      this.phase='ready';
-      this.winner=null;
+      this.turn=(Math.random()<0.5)?'A':'B';
+      this.phase='ready'; this.winner=null;
 
       this.ball.p.x=CONFIG.world.w/2; this.ball.p.y=CONFIG.world.h/2;
-      this.ball.v.x=0; this.ball.v.y=0; this.ball.active=true;
+      this.ball.v.x=0; this.ball.v.y=0;
 
       this.buildFixedLayout();
       this.undoSnap=null;
       this.goalBannerUntil=0;
       this.pauseUntil=0;
-
+      this.pendingCornerTeam=null;
       this.input.resetSelection();
 
-      this.placeBallForTurn();
+      // saque inicial aleatorio
+      this.placeBallAtCornerForTeam(this.turn, Math.random()<0.5 ? 'top' : 'bottom');
+
+      this.setCornerOverlay(false);
       this.updateHUD();
     }
 
-    // ✅ Saque desde esquina del campo del que tira
-    placeBallForTurn(){
+    setCornerOverlay(show){
+      this.ui.cornerOverlay.classList.toggle('show', !!show);
+    }
+
+    placeBallAtCornerForTeam(team, which){ // which: 'top'|'bottom'
       const W=CONFIG.world.w, H=CONFIG.world.h;
-      const margin = 52; // dentro del campo
-      const topCorner = { y: margin };
-      const botCorner = { y: H - margin };
-
-      const chooseTop = Math.random() < 0.5;
-
-      if(this.turn==='A'){
-        this.ball.p.x = margin;
-        this.ball.p.y = chooseTop ? topCorner.y : botCorner.y;
-      }else{
-        this.ball.p.x = W - margin;
-        this.ball.p.y = chooseTop ? topCorner.y : botCorner.y;
-      }
-
+      const m=CONFIG.cornerMargin;
+      this.ball.p.y = (which==='top') ? m : (H-m);
+      this.ball.p.x = (team==='A') ? m : (W-m);
       this.ball.v.x=0; this.ball.v.y=0;
     }
 
     shootBall(dir, impulse){
-      if(this.phase!=='ready') return;
       if(!this.canShootNow()) return;
-
-      // Snapshot para undo justo antes del tiro
       this.undoSnap=this.snapshot();
 
-      // Impulso a la bola
-      this.ball.v.x += dir.x * (impulse / this.ball.mass);
-      this.ball.v.y += dir.y * (impulse / this.ball.mass);
+      this.ball.v.x += dir.x*(impulse/this.ball.mass);
+      this.ball.v.y += dir.y*(impulse/this.ball.mass);
 
       this.phase='sim';
       this.simStartMs=nowMs();
@@ -1105,10 +1014,7 @@
     }
 
     allStopped(){
-      for(const b of this.getActiveBodies()){
-        if(b.speed()>CONFIG.physics.stopSpeed) return false;
-      }
-      return true;
+      return this.ball.speed() <= CONFIG.physics.stopSpeed;
     }
 
     checkGoal(){
@@ -1118,11 +1024,8 @@
       const b=this.ball;
 
       const inMouth = (b.p.y>=yTop && b.p.y<=yBot);
-
-      // Gol: la bola ha entrado completamente (centro +/- radio)
       if(inMouth && (b.p.x + b.r < 0)) return { scorer:'B', conceded:'A' };
       if(inMouth && (b.p.x - b.r > W)) return { scorer:'A', conceded:'B' };
-
       return null;
     }
 
@@ -1130,7 +1033,6 @@
       const candidates=this.pegs.filter(p=>p.active && p.team===team);
       if(!candidates.length) return;
 
-      // Quitar uno de manera "natural": el más cercano a su portería (como perder un jugador atrás)
       const targetX = (team==='A') ? 0 : CONFIG.world.w;
       let best=candidates[0], bestScore=Infinity;
       for(const p of candidates){
@@ -1138,39 +1040,59 @@
         if(score < bestScore){ bestScore=score; best=p; }
       }
       best.active=false;
-      best.v.x=best.v.y=0;
     }
 
     applyGoal(g){
-      if(this.phase==='gameover') return;
-
       if(g.scorer==='A') this.scoreA++; else this.scoreB++;
-
-      // ✅ Al meter gol, se quita un palito del equipo que encaja (rival del que marca)
       this.removeOnePeg(g.conceded);
 
-      // Efecto GOOL
+      // banner
       this.goalBannerUntil=nowMs()+CONFIG.effects.goalBannerMs;
-      document.getElementById('goalBanner').classList.add('show');
+      this.ui.goalBanner.classList.add('show');
 
-      // Victoria
+      // parar bola
+      this.ball.v.x=0; this.ball.v.y=0;
+
+      // victoria
       if(this.scoreA>=11 || this.scoreB>=11){
         this.phase='gameover';
         this.winner=(this.scoreA>=11)?'A':'B';
-      }else{
-        // Pausa breve y siguiente turno
-        this.pauseUntil=nowMs()+CONFIG.effects.goalPauseMs;
-        this.phase='paused';
+        this.pendingCornerTeam=null;
+        this.setCornerOverlay(false);
+        this.updateHUD();
+        return;
       }
 
-      // Parar todo
-      for(const b of this.getActiveBodies()){ b.v.x=0; b.v.y=0; }
+      // ✅ tras gol: saca el equipo que encaja y debe elegir esquina
+      this.turn = g.conceded; // el que recibió el gol
+      this.pendingCornerTeam = g.conceded;
 
-      // Turno cambia y coloca bola en su esquina (nuevo saque)
-      this.turn = (this.turn==='A')?'B':'A';
-      this.placeBallForTurn();
-
+      this.phase='waitingCorner';
       this.input.resetSelection();
+
+      // preparar overlay
+      const teamName = (this.pendingCornerTeam==='A') ? 'Equipo A' : 'Equipo B';
+      this.ui.cornerTitle.textContent = `Saque tras gol · ${teamName}`;
+      this.ui.cornerDesc.textContent = `El ${teamName} recibió el gol. Elige una de tus dos esquinas para sacar.`;
+      this.setCornerOverlay(true);
+
+      this.updateHUD();
+    }
+
+    chooseCorner(which){
+      if(this.phase!=='waitingCorner') return;
+      const team=this.pendingCornerTeam;
+      if(!team) return;
+
+      this.placeBallAtCornerForTeam(team, which);
+
+      this.pendingCornerTeam=null;
+      this.setCornerOverlay(false);
+
+      // pequeño cooldown visual post-gol
+      this.pauseUntil=nowMs()+CONFIG.effects.goalPauseMs;
+      this.phase='paused';
+
       this.updateHUD();
     }
 
@@ -1178,6 +1100,7 @@
       const ctx=this.renderer.ctx;
       const w=this.renderer.w, h=this.renderer.h;
       const dpr=this.renderer.dpr;
+
       ctx.save();
       ctx.fillStyle='rgba(0,0,0,.35)';
       ctx.fillRect(0,0,w,h);
@@ -1194,7 +1117,6 @@
       ctx.font=`800 ${Math.floor(16*dpr)}px system-ui`;
       ctx.fillStyle='rgba(234,240,255,.85)';
       ctx.fillText('Pulsa “Reiniciar partido” para jugar otra vez.',w/2,h/2+28*dpr);
-
       ctx.restore();
     }
 
@@ -1204,13 +1126,14 @@
       this.last=t;
       this.acc += dtFrame;
 
-      // Hide GOOL banner
+      // ocultar banner
       if(t>=this.goalBannerUntil){
-        document.getElementById('goalBanner').classList.remove('show');
+        this.ui.goalBanner.classList.remove('show');
       }
 
-      // Pause after goal
+      // pausa post-acción
       if(this.phase==='paused' && t>=this.pauseUntil){
+        // si no hay overlay de esquina, volvemos a ready
         this.phase='ready';
         this.updateHUD();
       }
@@ -1230,40 +1153,37 @@
         }else{
           const elapsed=(t-this.simStartMs)/1000;
           if(this.allStopped() || elapsed>=CONFIG.physics.maxSimSeconds){
-            for(const b of this.getActiveBodies()){ b.v.x=0; b.v.y=0; }
+            // detener y pasar turno (bola se queda donde cayó)
+            this.ball.v.x=0; this.ball.v.y=0;
             this.phase='ready';
-
-            // ✅ fin del turno: cambia el turno y recoloca bola en esquina del que saca
             this.turn=(this.turn==='A')?'B':'A';
-            this.placeBallForTurn();
-
             this.input.resetSelection();
             this.updateHUD();
           }
         }
       }
 
-      // Render
       this.renderer.draw();
-
-      if(this.phase==='gameover'){
-        this.drawGameOverOverlay();
-      }
+      if(this.phase==='gameover') this.drawGameOverOverlay();
 
       requestAnimationFrame(()=>this.loop());
     }
   }
 
-  // Init
+  // init
   const canvas=document.getElementById('c');
   const shell=document.getElementById('shell');
-  const game=new Game(canvas,shell);
+  new Game(canvas,shell);
 
-  // Help modal close on ESC
+  // modal help
+  document.getElementById('help').addEventListener('click', ()=>document.getElementById('helpBack').classList.add('show'));
+  document.getElementById('closeHelp').addEventListener('click', ()=>document.getElementById('helpBack').classList.remove('show'));
+  document.getElementById('helpBack').addEventListener('click', (e)=>{
+    if(e.target.id==='helpBack') document.getElementById('helpBack').classList.remove('show');
+  });
   window.addEventListener('keydown', (e)=>{
     if(e.key==='Escape') document.getElementById('helpBack').classList.remove('show');
   });
-
 })();
 </script>
 
@@ -1271,23 +1191,22 @@
 ============================================================
 CÓMO JUGAR
 ============================================================
-- Turnos alternos A/B.
-- Cada turno es un SAQUE: la bola se coloca en una esquina del campo del equipo que tira.
-- Para chutar: selecciona la bola y arrastra en la dirección exacta del tiro.
-  La potencia depende de la distancia del arrastre (limitada).
-- Los palitos de ambos equipos estorban (incluido tu propio equipo).
+- Los palitos son fijos: no se mueven, solo actúan como obstáculos.
+- Inicio: se elige aleatoriamente el equipo que empieza y la bola se coloca en una esquina (arriba/abajo) de su campo (aleatoria).
+- En tu turno: click/toca la bola → arrastra (dirección + potencia) → suelta.
+- Si NO hay gol: la bola se juega desde donde se quede (no se recoloca entre turnos).
 - Gol: la bola entra completamente en la portería rival.
-- Al gol: se quita 1 palito del equipo que encaja y se deja apoyado en el borde (visible).
+- Tras gol: el equipo que encaja elige esquina superior/inferior para sacar (overlay con botones).
+- Al gol: se quita 1 palito del equipo que encaja y se apoya en el borde (visible).
 - Gana quien llegue a 11.
 
 ============================================================
 PARÁMETROS RECOMENDADOS PARA AJUSTAR (CONFIG)
 ============================================================
-- CONFIG.shot.maxImpulse / maxDrag: fuerza y recorrido del tiro.
-- CONFIG.ball.damp / CONFIG.peg.damp: fricción (más bajo = se para antes).
-- CONFIG.physics.solverIterations: estabilidad colisiones.
-- CONFIG.goal.opening: tamaño de la boca.
-- CONFIG.render.removed.scale/alpha: tamaño y aspecto de palitos retirados.
+- CONFIG.shot.maxImpulse / maxDrag: fuerza del tiro.
+- CONFIG.ball.damp: fricción (más bajo = se frena antes).
+- CONFIG.physics.stopSpeed: umbral de parada.
+- CONFIG.cornerMargin: margen de colocación en esquinas.
 -->
 </body>
 </html>
