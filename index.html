@@ -58,14 +58,10 @@
       background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.22));
     }
 
-    .playArea{
-      position:relative;
-      flex:1;
-      min-height:360px;
-    }
-
+    .playArea{position:relative;flex:1;min-height:360px;}
     canvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:#091022}
 
+    /* Banner texto */
     .goalBanner{
       position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;
       opacity:0;transition:opacity .18s ease;z-index:8;
@@ -101,7 +97,6 @@
       padding:12px;
     }
     .overlay.show{display:flex}
-
     .panel{
       pointer-events:auto;
       width:min(560px,calc(100% - 24px));
@@ -127,10 +122,7 @@
       max-width:900px;
       user-select:none;
     }
-    .hintHead{
-      display:flex;align-items:center;justify-content:space-between;gap:10px;
-      font-weight:900;color:#fff;
-    }
+    .hintHead{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:900;color:#fff;}
     .chev{opacity:.75}
     .hintBody{margin-top:6px}
     .hintCard.compact .hintBody{display:none}
@@ -154,8 +146,8 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <div class="title">PLAKKS-like Flick Soccer <span class="badge">cerrar aviso gol</span></div>
-      <div class="sub">El panel se puede cerrar sin salir del modo “quitar palito”</div>
+      <div class="title">PLAKKS-like Flick Soccer <span class="badge">animación gol</span></div>
+      <div class="sub">Flash + onda en portería + GOOOL</div>
     </div>
     <div class="hud">
       <div class="score" aria-label="Marcador">
@@ -174,16 +166,16 @@
     </div>
   </div>
 
-  <div class="shell" id="shell">
+  <div class="shell">
     <div class="playArea" id="playArea">
       <canvas id="c"></canvas>
+
       <div class="goalBanner" id="goalBanner"><div class="goalText">GOOOL</div></div>
 
       <div class="overlay" id="removeOverlay">
         <div class="panel">
           <div class="panelHead">
             <h3 id="removeTitle">Retirar palito</h3>
-            <!-- ✅ Nuevo: cerrar solo el panel, sin cambiar fase -->
             <button id="closeRemove" class="secondary" type="button">Cerrar</button>
           </div>
           <p id="removeDesc">Te han metido gol. Toca uno de tus palitos para retirarlo (quedará tumbado fuera del campo).</p>
@@ -206,18 +198,16 @@
       </div>
     </div>
 
-    <div class="bottomBar" id="bottomBar">
+    <div class="bottomBar">
       <div class="hintCard" id="hintCard" role="button" tabindex="0" aria-expanded="true" title="Toca para plegar/desplegar">
         <div class="hintHead">
           <span>Controles</span>
           <span class="chev" id="hintChev">▾</span>
         </div>
-        <div class="hintBody" id="hintBody">
+        <div class="hintBody">
           <div><b>Chute:</b> toca la bola → arrastra <b>hacia atrás</b> → suelta.</div>
           <div><b>Tras gol:</b> el equipo que encaja elige qué palito retirar, luego elige esquina para sacar.</div>
-          <div style="margin-top:6px;opacity:.85">
-            Tip móvil: toca aquí para <span class="kbd">plegar</span>.
-          </div>
+          <div style="margin-top:6px;opacity:.85">Tip móvil: toca aquí para <span class="kbd">plegar</span>.</div>
         </div>
       </div>
     </div>
@@ -261,88 +251,77 @@
     render: {
       pitchMargin: 34, pitchCornerR: 38, grassNoise: 0.06,
       shadowOffset: { x: 10, y: 14 }, shadowBlur: 16, vignette: true,
-      removed: { scale: 0.78, alpha: 0.82, pad: 10, gap: 10, lieAngleBase: Math.PI/2, lieAngleJitter: 0.28 },
+      removed: { scale: 0.78, alpha: 0.82, lieAngleBase: Math.PI/2, lieAngleJitter: 0.28 },
       pegVisual: { widthMul: 1.05, lengthMul: 2.65, tiltA: -0.18, tiltB:  0.18, shadowRxMul: 0.85, shadowRyMul: 0.30 },
       ballPickExtraCssPx: 18, pegPickExtraCssPx: 10
     },
-    effects: { goalBannerMs: 850, goalPauseMs: 520 },
+    effects: {
+      goalBannerMs: 900,
+      goalPauseMs: 520,
+      goalFxMs: 700,          // ✅ duración FX onda/flash
+      goalFxMaxR: 520,        // ✅ tamaño de la onda (en world units aprox)
+    },
     cornerMargin: 52,
   };
 
-  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-  const lerp = (a,b,t)=>a+(b-a)*t;
-  const nowMs = ()=>performance.now();
-  const rand = (a,b)=>a+Math.random()*(b-a);
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const nowMs=()=>performance.now();
+  const rand=(a,b)=>a+Math.random()*(b-a);
 
-  class Vec2{ constructor(x=0,y=0){this.x=x;this.y=y;} mag(){return Math.hypot(this.x,this.y);} mul(s){this.x*=s;this.y*=s;return this;} }
-  class Ball{
-    constructor(x,y){ this.p=new Vec2(x,y); this.v=new Vec2(0,0);
-      this.r=CONFIG.ball.r; this.restitution=CONFIG.ball.restitution; this.damp=CONFIG.ball.damp; this.maxSpeed=CONFIG.ball.maxSpeed; }
-    speed(){return this.v.mag();}
-  }
-  class Peg{
-    constructor(x,y,team,id){ this.p=new Vec2(x,y); this.r=CONFIG.peg.r; this.team=team; this.id=id; this.active=true; this.removedPose=null; }
-  }
+  class Vec2{constructor(x=0,y=0){this.x=x;this.y=y;} mag(){return Math.hypot(this.x,this.y);} mul(s){this.x*=s;this.y*=s;return this;}}
+  class Ball{constructor(x,y){this.p=new Vec2(x,y);this.v=new Vec2(0,0);this.r=CONFIG.ball.r;this.restitution=CONFIG.ball.restitution;this.damp=CONFIG.ball.damp;this.maxSpeed=CONFIG.ball.maxSpeed;} speed(){return this.v.mag();}}
+  class Peg{constructor(x,y,team,id){this.p=new Vec2(x,y);this.r=CONFIG.peg.r;this.team=team;this.id=id;this.active=true;this.removedPose=null;}}
 
   class Physics{
     constructor(game){this.game=game;}
-    mouthYBounds(){ const H=CONFIG.world.h, open=CONFIG.goal.opening; const yTop=(H-open)/2, yBot=yTop+open; return {yTop,yBot}; }
-    inMouth(y){ const {yTop,yBot}=this.mouthYBounds(); return (y>=yTop && y<=yBot); }
-
+    mouthYBounds(){const H=CONFIG.world.h,open=CONFIG.goal.opening;const yTop=(H-open)/2,yBot=yTop+open;return{yTop,yBot};}
+    inMouth(y){const {yTop,yBot}=this.mouthYBounds();return (y>=yTop && y<=yBot);}
     step(dt){
-      const W=CONFIG.world.w, H=CONFIG.world.h, b=this.game.ball;
-
-      b.p.x += b.v.x*dt; b.p.y += b.v.y*dt;
+      const W=CONFIG.world.w,H=CONFIG.world.h,b=this.game.ball;
+      b.p.x+=b.v.x*dt;b.p.y+=b.v.y*dt;
       b.v.mul(b.damp);
-
       const s=b.speed();
-      if(s>b.maxSpeed){ const k=b.maxSpeed/(s+1e-9); b.v.mul(k); }
+      if(s>b.maxSpeed){const k=b.maxSpeed/(s+1e-9);b.v.mul(k);}
 
-      const e=CONFIG.physics.wallRestitution, en=CONFIG.physics.netRestitution;
-      const inMouth=this.inMouth(b.p.y), dPhys=CONFIG.goal.boxDepthPhysics;
+      const e=CONFIG.physics.wallRestitution,en=CONFIG.physics.netRestitution;
+      const inMouth=this.inMouth(b.p.y),dPhys=CONFIG.goal.boxDepthPhysics;
 
       if(!inMouth){
-        if(b.p.x-b.r<0){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e; }
-        if(b.p.x+b.r>W){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e; }
+        if(b.p.x-b.r<0){b.p.x=b.r;b.v.x=Math.abs(b.v.x)*e;}
+        if(b.p.x+b.r>W){b.p.x=W-b.r;b.v.x=-Math.abs(b.v.x)*e;}
       }else{
-        if(b.p.x - b.r < -dPhys){ b.p.x = -dPhys + b.r; b.v.x = Math.abs(b.v.x) * en; }
-        if(b.p.x + b.r > W + dPhys){ b.p.x = W + dPhys - b.r; b.v.x = -Math.abs(b.v.x) * en; }
+        if(b.p.x-b.r<-dPhys){b.p.x=-dPhys+b.r;b.v.x=Math.abs(b.v.x)*en;}
+        if(b.p.x+b.r>W+dPhys){b.p.x=W+dPhys-b.r;b.v.x=-Math.abs(b.v.x)*en;}
       }
+      if(b.p.y-b.r<0){b.p.y=b.r;b.v.y=Math.abs(b.v.y)*e;}
+      if(b.p.y+b.r>H){b.p.y=H-b.r;b.v.y=-Math.abs(b.v.y)*e;}
 
-      if(b.p.y-b.r<0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*e; }
-      if(b.p.y+b.r>H){ b.p.y=H-b.r; b.v.y=-Math.abs(b.v.y)*e; }
-
-      for(let it=0; it<CONFIG.physics.solverIterations; it++){
-        for(const p of this.game.pegs){ if(!p.active) continue; this.resolveBallPeg(b,p); }
+      for(let it=0;it<CONFIG.physics.solverIterations;it++){
+        for(const p of this.game.pegs){if(!p.active)continue;this.resolveBallPeg(b,p);}
       }
     }
-
-    resolveBallPeg(ball, peg){
-      const dx=ball.p.x-peg.p.x, dy=ball.p.y-peg.p.y;
+    resolveBallPeg(ball,peg){
+      const dx=ball.p.x-peg.p.x,dy=ball.p.y-peg.p.y;
       let dist=Math.hypot(dx,dy);
       const r=ball.r+peg.r;
-      if(dist<=0) dist=0.0001;
-
+      if(dist<=0)dist=0.0001;
       if(dist<r){
-        const penetration=r-dist;
-        const nx=dx/dist, ny=dy/dist;
-
-        const slop=CONFIG.physics.penetrationSlop;
-        const percent=CONFIG.physics.penetrationPercent;
+        const penetration=r-dist,nx=dx/dist,ny=dy/dist;
+        const slop=CONFIG.physics.penetrationSlop,percent=CONFIG.physics.penetrationPercent;
         const corr=Math.max(penetration-slop,0)*percent;
+        ball.p.x+=nx*corr;ball.p.y+=ny*corr;
 
-        ball.p.x += nx*corr; ball.p.y += ny*corr;
-
-        const velAlong = ball.v.x*nx + ball.v.y*ny;
+        const velAlong=ball.v.x*nx+ball.v.y*ny;
         if(velAlong<0){
-          const e = Math.min(ball.restitution, CONFIG.peg.restitution);
-          ball.v.x = ball.v.x - (1+e)*velAlong*nx;
-          ball.v.y = ball.v.y - (1+e)*velAlong*ny;
+          const e=Math.min(ball.restitution,CONFIG.peg.restitution);
+          ball.v.x=ball.v.x-(1+e)*velAlong*nx;
+          ball.v.y=ball.v.y-(1+e)*velAlong*ny;
 
-          const tx = ball.v.x - (ball.v.x*nx+ball.v.y*ny)*nx;
-          const ty = ball.v.y - (ball.v.x*nx+ball.v.y*ny)*ny;
-          const tmag = Math.hypot(tx,ty);
-          if(tmag>1e-6){ ball.v.x -= (tx/tmag)*3.0; ball.v.y -= (ty/tmag)*3.0; }
+          const tx=ball.v.x-(ball.v.x*nx+ball.v.y*ny)*nx;
+          const ty=ball.v.y-(ball.v.x*nx+ball.v.y*ny)*ny;
+          const tmag=Math.hypot(tx,ty);
+          if(tmag>1e-6){ball.v.x-=(tx/tmag)*3.0;ball.v.y-=(ty/tmag)*3.0;}
         }
       }
     }
@@ -350,54 +329,40 @@
 
   class Renderer{
     constructor(game,canvas,playArea){
-      this.game=game; this.canvas=canvas; this.playArea=playArea;
-      this.ctx=canvas.getContext('2d');
-
-      this.noise=document.createElement('canvas');
-      this.noise.width=256; this.noise.height=256;
-      this.noiseCtx=this.noise.getContext('2d');
-      this.buildNoise();
-
-      this.scale=1; this.ox=0; this.oy=0; this.w=0; this.h=0; this.dpr=1;
+      this.game=game;this.canvas=canvas;this.playArea=playArea;this.ctx=canvas.getContext('2d');
+      this.noise=document.createElement('canvas');this.noise.width=256;this.noise.height=256;
+      this.noiseCtx=this.noise.getContext('2d');this.buildNoise();
+      this.scale=1;this.ox=0;this.oy=0;this.w=0;this.h=0;this.dpr=1;
     }
-
     buildNoise(){
       const img=this.noiseCtx.createImageData(256,256);
       for(let i=0;i<img.data.length;i+=4){
         const n=(Math.random()*2-1)*255;
-        img.data[i]=0; img.data[i+1]=120+n*0.08; img.data[i+2]=0; img.data[i+3]=255;
+        img.data[i]=0;img.data[i+1]=120+n*0.08;img.data[i+2]=0;img.data[i+3]=255;
       }
       this.noiseCtx.putImageData(img,0,0);
     }
-
     resize(){
-      const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+      const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
       const r=this.playArea.getBoundingClientRect();
-      const cssW=Math.max(300, r.width||900);
-      const cssH=Math.max(300, r.height||540);
-      const w=Math.floor(cssW*dpr), h=Math.floor(cssH*dpr);
+      const cssW=Math.max(300,r.width||900),cssH=Math.max(300,r.height||540);
+      const w=Math.floor(cssW*dpr),h=Math.floor(cssH*dpr);
       if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;}
-
       const pad=CONFIG.render.pitchMargin*dpr;
-      const sx=(w-pad*2)/CONFIG.world.w;
-      const sy=(h-pad*2)/CONFIG.world.h;
-      const scale=Math.max(0.0001, Math.min(sx,sy));
-
-      this.dpr=dpr; this.w=w; this.h=h; this.scale=scale;
+      const sx=(w-pad*2)/CONFIG.world.w, sy=(h-pad*2)/CONFIG.world.h;
+      const scale=Math.max(0.0001,Math.min(sx,sy));
+      this.dpr=dpr;this.w=w;this.h=h;this.scale=scale;
       this.ox=(w-CONFIG.world.w*scale)*0.5;
       this.oy=(h-CONFIG.world.h*scale)*0.5;
     }
-
-    w2s(p){ return { x:this.ox+p.x*this.scale, y:this.oy+p.y*this.scale }; }
-
+    w2s(p){return{x:this.ox+p.x*this.scale,y:this.oy+p.y*this.scale};}
     maxDragPx(){
-      const minSide = Math.min(this.w, this.h);
-      const desired = minSide * CONFIG.shot.maxDragFrac;
-      const minD = CONFIG.shot.minDragCssPx * this.dpr;
-      const maxD = CONFIG.shot.maxDragCssPx * this.dpr;
-      return clamp(desired, minD, maxD);
+      const minSide=Math.min(this.w,this.h);
+      const desired=minSide*CONFIG.shot.maxDragFrac;
+      const minD=CONFIG.shot.minDragCssPx*this.dpr;
+      const maxD=CONFIG.shot.maxDragCssPx*this.dpr;
+      return clamp(desired,minD,maxD);
     }
-
     roundRect(x,y,w,h,r){
       const ctx=this.ctx;
       const rr=Math.min(r,w/2,h/2);
@@ -409,18 +374,17 @@
       ctx.arcTo(x,y,x+w,y,rr);
       ctx.closePath();
     }
-
     grassFillAt(x0,y0,w,h){
       const ctx=this.ctx;
       const g=ctx.createLinearGradient(x0,y0,x0+w,y0+h);
-      g.addColorStop(0,'#0f6b3c'); g.addColorStop(0.5,'#0e5f37'); g.addColorStop(1,'#0b4a2c');
+      g.addColorStop(0,'#0f6b3c');g.addColorStop(0.5,'#0e5f37');g.addColorStop(1,'#0b4a2c');
       return g;
     }
 
     drawPitch(){
       const ctx=this.ctx;
-      const W=CONFIG.world.w, H=CONFIG.world.h;
-      const x0=this.ox, y0=this.oy, s=this.scale;
+      const W=CONFIG.world.w,H=CONFIG.world.h;
+      const x0=this.ox,y0=this.oy,s=this.scale;
       const r=CONFIG.render.pitchCornerR*this.dpr;
 
       const open=CONFIG.goal.opening;
@@ -431,7 +395,7 @@
 
       ctx.save();
       ctx.fillStyle=this.grassFillAt(x0,y0,W*s,H*s);
-      this.roundRect(x0,y0,W*s,H*s,r); ctx.fill();
+      this.roundRect(x0,y0,W*s,H*s,r);ctx.fill();
 
       ctx.globalAlpha=0.13;
       for(let i=0;i<10;i++){
@@ -457,8 +421,8 @@
       ctx.save();
       ctx.strokeStyle=this.grassFillAt(x0,y0,W*s,H*s);
       ctx.lineWidth=8*this.dpr;
-      ctx.beginPath(); ctx.moveTo(x0, gy0); ctx.lineTo(x0, gy0+gh); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x0+W*s, gy0); ctx.lineTo(x0+W*s, gy0+gh); ctx.stroke();
+      ctx.beginPath();ctx.moveTo(x0,gy0);ctx.lineTo(x0,gy0+gh);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(x0+W*s,gy0);ctx.lineTo(x0+W*s,gy0+gh);ctx.stroke();
       ctx.restore();
 
       ctx.lineWidth=3*this.dpr;
@@ -468,100 +432,85 @@
 
       ctx.lineWidth=3*this.dpr;
       ctx.strokeStyle='rgba(245,255,245,.85)';
-      ctx.beginPath(); ctx.moveTo(x0+(W*s)/2, y0+2*this.dpr); ctx.lineTo(x0+(W*s)/2, y0+H*s-2*this.dpr); ctx.stroke();
+      ctx.beginPath();ctx.moveTo(x0+(W*s)/2,y0+2*this.dpr);ctx.lineTo(x0+(W*s)/2,y0+H*s-2*this.dpr);ctx.stroke();
 
-      ctx.beginPath(); ctx.arc(x0+(W*s)/2,y0+(H*s)/2,110*s,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath();ctx.arc(x0+(W*s)/2,y0+(H*s)/2,110*s,0,Math.PI*2);ctx.stroke();
 
       ctx.fillStyle='rgba(245,255,245,.95)';
-      ctx.beginPath(); ctx.arc(x0+(W*s)/2,y0+(H*s)/2,5*this.dpr,0,Math.PI*2); ctx.fill();
+      ctx.beginPath();ctx.arc(x0+(W*s)/2,y0+(H*s)/2,5*this.dpr,0,Math.PI*2);ctx.fill();
 
       ctx.restore();
     }
 
     drawGoals(){
       const ctx=this.ctx;
-      const W=CONFIG.world.w, H=CONFIG.world.h;
+      const W=CONFIG.world.w,H=CONFIG.world.h;
       const open=CONFIG.goal.opening;
       const depth=CONFIG.goal.boxDepth;
       const pad=CONFIG.goal.innerPad;
       const cell=CONFIG.goal.netCell;
 
       const yTop=(H-open)/2;
-      const y0 = this.oy + yTop*this.scale;
-      const h = open*this.scale;
-      const d = depth*this.scale;
+      const y0=this.oy+yTop*this.scale;
+      const h=open*this.scale;
+      const d=depth*this.scale;
 
-      const drawNet = (x, y, w, hh, alpha=0.22) => {
+      const drawNet=(x,y,w,hh,alpha=0.22)=>{
         ctx.save();
         ctx.globalAlpha=alpha;
         ctx.strokeStyle='rgba(255,255,255,.75)';
         ctx.lineWidth=1.1*this.dpr;
-        for(let yy=y; yy<=y+hh+0.001; yy+=cell*this.scale){
-          ctx.beginPath(); ctx.moveTo(x,yy); ctx.lineTo(x+w,yy); ctx.stroke();
-        }
-        for(let xx=x; xx<=x+w+0.001; xx+=cell*this.scale){
-          ctx.beginPath(); ctx.moveTo(xx,y); ctx.lineTo(xx,y+hh); ctx.stroke();
-        }
+        for(let yy=y;yy<=y+hh+0.001;yy+=cell*this.scale){ctx.beginPath();ctx.moveTo(x,yy);ctx.lineTo(x+w,yy);ctx.stroke();}
+        for(let xx=x;xx<=x+w+0.001;xx+=cell*this.scale){ctx.beginPath();ctx.moveTo(xx,y);ctx.lineTo(xx,y+hh);ctx.stroke();}
         ctx.restore();
       };
 
-      const drawBox = (isLeft) => {
-        const xLine = this.ox + (isLeft ? 0 : W*this.scale);
-        const boxX = isLeft ? (xLine - d) : xLine;
-        const boxY = y0;
+      const drawBox=(isLeft)=>{
+        const xLine=this.ox+(isLeft?0:W*this.scale);
+        const boxX=isLeft?(xLine-d):xLine;
+        const boxY=y0;
 
         ctx.save();
-        const bg = ctx.createLinearGradient(
-          boxX, boxY,
-          isLeft ? (boxX - d) : (boxX + d),
-          boxY
-        );
+        const bg=ctx.createLinearGradient(boxX,boxY,isLeft?(boxX-d):(boxX+d),boxY);
         bg.addColorStop(0,'rgba(0,0,0,.10)');
         bg.addColorStop(1,'rgba(0,0,0,.34)');
         ctx.fillStyle=bg;
-        ctx.fillRect(boxX, boxY, d, h);
+        ctx.fillRect(boxX,boxY,d,h);
 
-        const innerX = boxX + pad*this.scale;
-        const innerY = boxY + pad*this.scale;
-        const innerW = d - 2*pad*this.scale;
-        const innerH = h - 2*pad*this.scale;
-        drawNet(innerX, innerY, innerW, innerH, 0.22);
+        const innerX=boxX+pad*this.scale, innerY=boxY+pad*this.scale;
+        const innerW=d-2*pad*this.scale, innerH=h-2*pad*this.scale;
+        drawNet(innerX,innerY,innerW,innerH,0.22);
 
         ctx.lineWidth=5*this.dpr;
         ctx.strokeStyle='rgba(255,255,255,.85)';
-        ctx.beginPath(); ctx.moveTo(xLine, boxY); ctx.lineTo(xLine, boxY+h); ctx.stroke();
+        ctx.beginPath();ctx.moveTo(xLine,boxY);ctx.lineTo(xLine,boxY+h);ctx.stroke();
 
         ctx.lineWidth=2.3*this.dpr;
         ctx.strokeStyle='rgba(255,255,255,.72)';
-        ctx.strokeRect(boxX, boxY, d, h);
+        ctx.strokeRect(boxX,boxY,d,h);
         ctx.restore();
       };
 
-      drawBox(true);
-      drawBox(false);
+      drawBox(true); drawBox(false);
     }
 
     drawShadowEllipse(x,y,rx,ry,alpha=0.35){
       const ctx=this.ctx;
       const off=CONFIG.render.shadowOffset;
-      const sx=x+off.x*this.dpr;
-      const sy=y+off.y*this.dpr;
+      const sx=x+off.x*this.dpr, sy=y+off.y*this.dpr;
       ctx.save();
       ctx.globalAlpha=alpha;
       ctx.fillStyle='rgba(0,0,0,.55)';
       ctx.shadowColor='rgba(0,0,0,.55)';
       ctx.shadowBlur=CONFIG.render.shadowBlur*this.dpr;
-      ctx.beginPath();
-      ctx.ellipse(sx,sy,rx,ry,0,0,Math.PI*2);
-      ctx.fill();
+      ctx.beginPath();ctx.ellipse(sx,sy,rx,ry,0,0,Math.PI*2);ctx.fill();
       ctx.restore();
     }
 
-    drawBall(ball, selected){
+    drawBall(ball,selected){
       const ctx=this.ctx;
       const p=this.w2s(ball.p);
       const r=ball.r*this.scale;
-
       this.drawShadowEllipse(p.x,p.y,r*1.05,r*0.78,0.40);
 
       ctx.save();
@@ -571,21 +520,19 @@
       g.addColorStop(0.7,'rgba(220,230,255,.88)');
       g.addColorStop(1,'rgba(140,160,190,.85)');
       ctx.fillStyle=g;
-      ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
+      ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
       ctx.strokeStyle='rgba(0,0,0,.18)';
-      ctx.lineWidth=1.3*this.dpr; ctx.stroke();
+      ctx.lineWidth=1.3*this.dpr;ctx.stroke();
 
       ctx.globalAlpha=0.55;
       ctx.fillStyle='rgba(255,255,255,.85)';
-      ctx.beginPath();
-      ctx.ellipse(p.x-r*0.25,p.y-r*0.35,r*0.35,r*0.25,-0.6,0,Math.PI*2);
-      ctx.fill();
+      ctx.beginPath();ctx.ellipse(p.x-r*0.25,p.y-r*0.35,r*0.35,r*0.25,-0.6,0,Math.PI*2);ctx.fill();
 
       if(selected){
         ctx.globalAlpha=1;
         ctx.strokeStyle='rgba(125,211,252,.95)';
         ctx.lineWidth=3*this.dpr;
-        ctx.beginPath(); ctx.arc(p.x,p.y,r+4*this.dpr,0,Math.PI*2); ctx.stroke();
+        ctx.beginPath();ctx.arc(p.x,p.y,r+4*this.dpr,0,Math.PI*2);ctx.stroke();
       }
       ctx.restore();
     }
@@ -595,56 +542,51 @@
       const base=(team==='A')?{a:'#4da3ff',b:'#124fae'}:{a:'#ff6b6b',b:'#b81f3d'};
       const pv=CONFIG.render.pegVisual;
 
-      const w = rScreen * pv.widthMul * 1.15;
-      const h = rScreen * pv.lengthMul;
-      const rr = w * 0.55;
-      const rot = (forcedRot!==null) ? forcedRot : ((team==='A') ? pv.tiltA : pv.tiltB);
+      const w=rScreen*pv.widthMul*1.15;
+      const h=rScreen*pv.lengthMul;
+      const rr=w*0.55;
+      const rot=(forcedRot!==null)?forcedRot:((team==='A')?pv.tiltA:pv.tiltB);
 
       ctx.save();
-      ctx.translate(x,y); ctx.rotate(rot);
+      ctx.translate(x,y);ctx.rotate(rot);
+      ctx.globalAlpha=alpha;
 
-      ctx.globalAlpha = alpha;
-      const lg = ctx.createLinearGradient(-w*0.65, 0, w*0.65, 0);
+      const lg=ctx.createLinearGradient(-w*0.65,0,w*0.65,0);
       lg.addColorStop(0,'rgba(255,255,255,.10)');
       lg.addColorStop(0.22,base.a);
       lg.addColorStop(0.55,base.b);
       lg.addColorStop(0.85,base.a);
       lg.addColorStop(1,'rgba(0,0,0,.15)');
 
-      ctx.fillStyle = lg;
-      this.roundRect(-w/2, -h/2, w, h, rr);
-      ctx.fill();
+      ctx.fillStyle=lg;
+      this.roundRect(-w/2,-h/2,w,h,rr);ctx.fill();
 
       ctx.strokeStyle='rgba(0,0,0,.20)';
-      ctx.lineWidth=1.2*this.dpr; ctx.stroke();
+      ctx.lineWidth=1.2*this.dpr;ctx.stroke();
 
-      ctx.globalAlpha = alpha * (dimmed ? 0.25 : 0.40);
-      const hg = ctx.createLinearGradient(-w/2,0,w/2,0);
+      ctx.globalAlpha=alpha*(dimmed?0.25:0.40);
+      const hg=ctx.createLinearGradient(-w/2,0,w/2,0);
       hg.addColorStop(0,'rgba(255,255,255,0)');
       hg.addColorStop(0.35,'rgba(255,255,255,.55)');
       hg.addColorStop(0.55,'rgba(255,255,255,.12)');
       hg.addColorStop(1,'rgba(255,255,255,0)');
-      ctx.fillStyle = hg;
-      this.roundRect(-w*0.42, -h*0.46, w*0.84, h*0.92, rr*0.95);
-      ctx.fill();
+      ctx.fillStyle=hg;
+      this.roundRect(-w*0.42,-h*0.46,w*0.84,h*0.92,rr*0.95);ctx.fill();
 
       if(dimmed){
-        ctx.globalAlpha = alpha * 0.25;
-        ctx.fillStyle = 'rgba(0,0,0,.55)';
-        this.roundRect(-w/2, -h/2, w, h, rr);
-        ctx.fill();
+        ctx.globalAlpha=alpha*0.25;
+        ctx.fillStyle='rgba(0,0,0,.55)';
+        this.roundRect(-w/2,-h/2,w,h,rr);ctx.fill();
       }
-
       ctx.restore();
     }
 
-    drawPeg(peg, highlight=false, selectable=false){
+    drawPeg(peg,highlight=false,selectable=false){
       const p=this.w2s(peg.p);
       const r=peg.r*this.scale;
       const pv=CONFIG.render.pegVisual;
-
-      const rx = r * pv.shadowRxMul;
-      const ry = r * pv.lengthMul * pv.shadowRyMul;
+      const rx=r*pv.shadowRxMul;
+      const ry=r*pv.lengthMul*pv.shadowRyMul;
       this.drawShadowEllipse(p.x,p.y,rx,ry,0.32);
 
       this.drawPegRodScreen(p.x,p.y,r,peg.team,false,1);
@@ -655,32 +597,27 @@
         ctx.globalAlpha=0.95;
         ctx.strokeStyle='rgba(255,255,255,.65)';
         ctx.lineWidth=2.2*this.dpr;
-        ctx.beginPath();
-        ctx.arc(p.x,p.y,r+7*this.dpr,0,Math.PI*2);
-        ctx.stroke();
+        ctx.beginPath();ctx.arc(p.x,p.y,r+7*this.dpr,0,Math.PI*2);ctx.stroke();
         ctx.restore();
       }
       if(highlight){
         ctx.save();
         ctx.strokeStyle='rgba(125,211,252,.95)';
         ctx.lineWidth=3.2*this.dpr;
-        ctx.beginPath();
-        ctx.arc(p.x,p.y,r+8*this.dpr,0,Math.PI*2);
-        ctx.stroke();
+        ctx.beginPath();ctx.arc(p.x,p.y,r+8*this.dpr,0,Math.PI*2);ctx.stroke();
         ctx.restore();
       }
     }
 
     drawAim(input){
-      if(!input.aiming || !input.ballSelected) return;
+      if(!input.aiming||!input.ballSelected) return;
       const ctx=this.ctx;
       const ball=this.game.ball;
       const bp=this.w2s(ball.p);
       const m=input.mouse;
 
-      const dx=m.x-bp.x, dy=m.y-bp.y;
+      const dx=m.x-bp.x,dy=m.y-bp.y;
       const dist=Math.hypot(dx,dy);
-
       const maxD=this.maxDragPx();
       const clamped=Math.min(dist,maxD);
       const t=clamp(clamped/maxD,0,1);
@@ -693,28 +630,24 @@
       ctx.shadowBlur=10*this.dpr;
 
       const k=(dist>1e-6)?(clamped/dist):0;
-      const ex=bp.x+dx*k, ey=bp.y+dy*k;
+      const ex=bp.x+dx*k,ey=bp.y+dy*k;
 
-      ctx.beginPath();
-      ctx.moveTo(bp.x,bp.y);
-      ctx.lineTo(ex,ey);
-      ctx.stroke();
+      ctx.beginPath();ctx.moveTo(bp.x,bp.y);ctx.lineTo(ex,ey);ctx.stroke();
 
       const ang=Math.atan2(dy,dx);
       const ah=10*this.dpr;
       ctx.beginPath();
       ctx.moveTo(ex,ey);
-      ctx.lineTo(ex-Math.cos(ang-0.55)*ah, ey-Math.sin(ang-0.55)*ah);
-      ctx.lineTo(ex-Math.cos(ang+0.55)*ah, ey-Math.sin(ang+0.55)*ah);
+      ctx.lineTo(ex-Math.cos(ang-0.55)*ah,ey-Math.sin(ang-0.55)*ah);
+      ctx.lineTo(ex-Math.cos(ang+0.55)*ah,ey-Math.sin(ang+0.55)*ah);
       ctx.closePath();
-      ctx.fillStyle=`rgba(125,211,252,${0.25+0.60*t})`;
-      ctx.fill();
+      ctx.fillStyle=`rgba(125,211,252,${0.25+0.60*t})`;ctx.fill();
 
-      const bw=190*this.dpr, bh=10*this.dpr;
-      const bx=this.ox+14*this.dpr, by=this.oy+(CONFIG.world.h*this.scale)-20*this.dpr;
+      const bw=190*this.dpr,bh=10*this.dpr;
+      const bx=this.ox+14*this.dpr,by=this.oy+(CONFIG.world.h*this.scale)-20*this.dpr;
       ctx.shadowBlur=0;
       ctx.fillStyle='rgba(0,0,0,.25)';
-      this.roundRect(bx,by,bw,bh,6*this.dpr); ctx.fill();
+      this.roundRect(bx,by,bw,bh,6*this.dpr);ctx.fill();
 
       const pw=bw*t;
       const pg=ctx.createLinearGradient(bx,by,bx+bw,by);
@@ -722,7 +655,7 @@
       pg.addColorStop(0.55,'rgba(125,211,252,.9)');
       pg.addColorStop(1,'rgba(251,113,133,.9)');
       ctx.fillStyle=pg;
-      this.roundRect(bx,by,pw,bh,6*this.dpr); ctx.fill();
+      this.roundRect(bx,by,pw,bh,6*this.dpr);ctx.fill();
 
       ctx.restore();
     }
@@ -730,29 +663,68 @@
     drawRemovedPegs(){
       const remCfg=CONFIG.render.removed;
       const pv=CONFIG.render.pegVisual;
-
-      const removed = this.game.pegs.filter(p=>!p.active && p.removedPose);
+      const removed=this.game.pegs.filter(p=>!p.active && p.removedPose);
       for(const p of removed){
-        const sp = this.w2s({x:p.removedPose.x, y:p.removedPose.y});
-        const r = (p.r*this.scale) * remCfg.scale;
-
-        const rx = r * pv.shadowRxMul;
-        const ry = r * pv.lengthMul * pv.shadowRyMul;
+        const sp=this.w2s({x:p.removedPose.x,y:p.removedPose.y});
+        const r=(p.r*this.scale)*remCfg.scale;
+        const rx=r*pv.shadowRxMul;
+        const ry=r*pv.lengthMul*pv.shadowRyMul;
         this.drawShadowEllipse(sp.x,sp.y,rx,ry,0.18);
-
-        this.drawPegRodScreen(sp.x, sp.y, r, p.team, true, remCfg.alpha, p.removedPose.angle);
+        this.drawPegRodScreen(sp.x,sp.y,r,p.team,true,remCfg.alpha,p.removedPose.angle);
       }
     }
 
     drawVignette(){
       if(!CONFIG.render.vignette) return;
-      const ctx=this.ctx;
-      const w=this.w, h=this.h;
+      const ctx=this.ctx,w=this.w,h=this.h;
       const g=ctx.createRadialGradient(w*0.5,h*0.5,Math.min(w,h)*0.25,w*0.5,h*0.5,Math.max(w,h)*0.65);
       g.addColorStop(0,'rgba(0,0,0,0)');
       g.addColorStop(1,'rgba(0,0,0,.35)');
+      ctx.save();ctx.fillStyle=g;ctx.fillRect(0,0,w,h);ctx.restore();
+    }
+
+    // ✅ NUEVO: animación de gol (onda + flash en portería)
+    drawGoalFX(){
+      const fx=this.game.goalFX;
+      if(!fx || !fx.active) return;
+
+      const t = (nowMs() - fx.startMs) / fx.durationMs;
+      if(t>=1){ fx.active=false; return; }
+
+      const ctx=this.ctx;
+      const p = this.w2s(fx.centerWorld);
+      const easeOut = (x)=>1-Math.pow(1-x,3);
+      const k=easeOut(clamp(t,0,1));
+
+      const maxR = fx.maxRWorld * this.scale;
+      const r = lerp(18*this.dpr, maxR, k);
+      const alpha = (1-t);
+
       ctx.save();
-      ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+      // flash suave sobre la portería
+      ctx.globalCompositeOperation='screen';
+      ctx.globalAlpha = 0.55 * alpha;
+      ctx.fillStyle = fx.side==='left' ? 'rgba(77,163,255,.55)' : 'rgba(255,107,107,.55)';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r*0.55, 0, Math.PI*2);
+      ctx.fill();
+
+      // onda circular (anillo)
+      ctx.globalAlpha = 0.95 * alpha;
+      ctx.lineWidth = (10*(1-t) + 2) * this.dpr;
+      ctx.strokeStyle = 'rgba(255,255,255,.85)';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+      ctx.stroke();
+
+      // segunda onda más grande (más tenue)
+      ctx.globalAlpha = 0.35 * alpha;
+      ctx.lineWidth = (6*(1-t) + 1) * this.dpr;
+      ctx.strokeStyle = 'rgba(125,211,252,.9)';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r*1.35, 0, Math.PI*2);
+      ctx.stroke();
+
       ctx.restore();
     }
 
@@ -764,18 +736,22 @@
       this.drawPitch();
       this.drawGoals();
 
-      const choosing = (this.game.phase==='chooseRemoval');
-      const mustTeam = this.game.pendingRemovalTeam;
+      const choosing=(this.game.phase==='chooseRemoval');
+      const mustTeam=this.game.pendingRemovalTeam;
 
       for(const p of this.game.pegs){
         if(!p.active) continue;
         const selectable = choosing && (p.team===mustTeam);
         const highlight = selectable && (this.game.hoverPegId===p.id);
-        this.drawPeg(p, highlight, selectable);
+        this.drawPeg(p,highlight,selectable);
       }
 
       this.drawBall(this.game.ball, this.game.input.ballSelected);
       this.drawRemovedPegs();
+
+      // FX por encima de campo pero debajo del aim
+      this.drawGoalFX();
+
       this.drawAim(this.game.input);
       this.drawVignette();
     }
@@ -789,17 +765,17 @@
       this.aiming=false;
       this.ballSelected=false;
 
-      canvas.addEventListener('pointerdown', (e)=>this.onDown(e));
-      window.addEventListener('pointermove', (e)=>this.onMove(e), {passive:true});
-      window.addEventListener('pointerup', (e)=>this.onUp(e));
-      canvas.addEventListener('touchstart', (e)=>e.preventDefault(), {passive:false});
-      canvas.addEventListener('touchmove', (e)=>e.preventDefault(), {passive:false});
+      canvas.addEventListener('pointerdown',(e)=>this.onDown(e));
+      window.addEventListener('pointermove',(e)=>this.onMove(e),{passive:true});
+      window.addEventListener('pointerup',(e)=>this.onUp(e));
+      canvas.addEventListener('touchstart',(e)=>e.preventDefault(),{passive:false});
+      canvas.addEventListener('touchmove',(e)=>e.preventDefault(),{passive:false});
     }
 
     pos(e){
       const rect=this.canvas.getBoundingClientRect();
-      const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
-      return { x:(e.clientX-rect.left)*dpr, y:(e.clientY-rect.top)*dpr };
+      const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+      return {x:(e.clientX-rect.left)*dpr, y:(e.clientY-rect.top)*dpr};
     }
 
     hitBall(screenPos){
@@ -807,17 +783,17 @@
       const bp=this.r.w2s(b.p);
       const dx=screenPos.x-bp.x, dy=screenPos.y-bp.y;
       const dist=Math.hypot(dx,dy);
-      const ballScreenR = b.r * this.r.scale;
-      const extra = CONFIG.render.ballPickExtraCssPx * this.r.dpr;
+      const ballScreenR=b.r*this.r.scale;
+      const extra=CONFIG.render.ballPickExtraCssPx*this.r.dpr;
       return dist <= (ballScreenR + extra);
     }
 
-    hitPeg(screenPos, peg){
+    hitPeg(screenPos,peg){
       const pp=this.r.w2s(peg.p);
       const dx=screenPos.x-pp.x, dy=screenPos.y-pp.y;
       const dist=Math.hypot(dx,dy);
-      const pegScreenR = peg.r * this.r.scale;
-      const extra = CONFIG.render.pegPickExtraCssPx * this.r.dpr;
+      const pegScreenR=peg.r*this.r.scale;
+      const extra=CONFIG.render.pegPickExtraCssPx*this.r.dpr;
       return dist <= (pegScreenR + extra);
     }
 
@@ -830,10 +806,7 @@
         for(const p of this.game.pegs){
           if(!p.active) continue;
           if(p.team!==team) continue;
-          if(this.hitPeg(this.mouse, p)){
-            this.game.choosePegToRemove(p.id);
-            break;
-          }
+          if(this.hitPeg(this.mouse,p)){ this.game.choosePegToRemove(p.id); break; }
         }
         return;
       }
@@ -841,27 +814,21 @@
       if(this.game.phase!=='ready') return;
       if(!this.game.canShootNow()) return;
 
-      if(this.hitBall(this.mouse)){
-        this.ballSelected=true;
-        this.aiming=true;
-      }else{
-        this.ballSelected=false;
-        this.aiming=false;
-      }
+      if(this.hitBall(this.mouse)){ this.ballSelected=true; this.aiming=true; }
+      else{ this.ballSelected=false; this.aiming=false; }
     }
 
     onMove(e){
       this.mouse=this.pos(e);
-
       if(this.game.phase==='chooseRemoval'){
         const team=this.game.pendingRemovalTeam;
         let hover=null;
         for(const p of this.game.pegs){
           if(!p.active) continue;
           if(p.team!==team) continue;
-          if(this.hitPeg(this.mouse, p)){ hover=p.id; break; }
+          if(this.hitPeg(this.mouse,p)){ hover=p.id; break; }
         }
-        this.game.hoverPegId = hover;
+        this.game.hoverPegId=hover;
       }
     }
 
@@ -869,27 +836,26 @@
       if(!this.pointerDown) return;
       this.pointerDown=false;
 
-      if(this.game.phase!=='ready') { this.aiming=false; return; }
-      if(!this.aiming || !this.ballSelected) { this.aiming=false; return; }
-      if(!this.game.canShootNow()) { this.aiming=false; return; }
+      if(this.game.phase!=='ready'){ this.aiming=false; return; }
+      if(!this.aiming || !this.ballSelected){ this.aiming=false; return; }
+      if(!this.game.canShootNow()){ this.aiming=false; return; }
 
       const ball=this.game.ball;
       const bp=this.r.w2s(ball.p);
-
       const dx=this.mouse.x-bp.x, dy=this.mouse.y-bp.y;
       const dist=Math.hypot(dx,dy);
 
       const maxD=this.r.maxDragPx();
       const clamped=Math.min(dist,maxD);
       const tRaw=clamp(clamped/maxD,0,1);
-      const t = Math.pow(tRaw, CONFIG.shot.responseCurve);
+      const t=Math.pow(tRaw,CONFIG.shot.responseCurve);
 
       if(clamped>3*this.r.dpr){
         const inv=1/(dist||1);
-        const dir={ x:-dx*inv, y:-dy*inv };
-        const targetSpeed = lerp(CONFIG.shot.minSpeed, CONFIG.shot.maxSpeed, t);
-        ball.v.x = dir.x * targetSpeed;
-        ball.v.y = dir.y * targetSpeed;
+        const dir={x:-dx*inv, y:-dy*inv};
+        const targetSpeed=lerp(CONFIG.shot.minSpeed,CONFIG.shot.maxSpeed,t);
+        ball.v.x=dir.x*targetSpeed;
+        ball.v.y=dir.y*targetSpeed;
         this.game.onShot();
       }
       this.aiming=false;
@@ -903,7 +869,7 @@
       this.canvas=canvas; this.playArea=playArea;
 
       this.scoreA=0; this.scoreB=0;
-      this.turn = (Math.random()<0.5)?'A':'B';
+      this.turn=(Math.random()<0.5)?'A':'B';
       this.phase='ready';
       this.winner=null;
 
@@ -925,6 +891,9 @@
       this.pendingGoal=null;
       this.hoverPegId=null;
 
+      // ✅ nuevo: estado FX gol
+      this.goalFX = { active:false, startMs:0, durationMs:CONFIG.effects.goalFxMs, side:'left', centerWorld:{x:0,y:0}, maxRWorld:CONFIG.effects.goalFxMaxR };
+
       this.acc=0;
       this.last=nowMs();
 
@@ -941,38 +910,33 @@
 
       document.getElementById('help').addEventListener('click', ()=>document.getElementById('helpBack').classList.add('show'));
       document.getElementById('closeHelp').addEventListener('click', ()=>document.getElementById('helpBack').classList.remove('show'));
-      document.getElementById('helpBack').addEventListener('click', (e)=>{
-        if(e.target.id==='helpBack') document.getElementById('helpBack').classList.remove('show');
-      });
+      document.getElementById('helpBack').addEventListener('click', (e)=>{ if(e.target.id==='helpBack') document.getElementById('helpBack').classList.remove('show'); });
 
       document.getElementById('cornerTop').addEventListener('click', ()=>this.chooseCorner('top'));
       document.getElementById('cornerBottom').addEventListener('click', ()=>this.chooseCorner('bottom'));
 
-      // ✅ nuevo: cerrar aviso de “retirar palito” sin salir de chooseRemoval
       document.getElementById('closeRemove').addEventListener('click', ()=>{
-        if(this.phase==='chooseRemoval'){
-          this.setOverlay('removeOverlay', false); // solo ocultar visualmente
-        }
+        if(this.phase==='chooseRemoval'){ this.setOverlay('removeOverlay', false); }
       });
 
-      const hint = document.getElementById('hintCard');
-      const toggle = () => {
+      const hint=document.getElementById('hintCard');
+      const toggle=()=>{
         hint.classList.toggle('compact');
-        const expanded = !hint.classList.contains('compact');
-        hint.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-        document.getElementById('hintChev').textContent = expanded ? '▾' : '▸';
+        const expanded=!hint.classList.contains('compact');
+        hint.setAttribute('aria-expanded', expanded?'true':'false');
+        document.getElementById('hintChev').textContent=expanded?'▾':'▸';
       };
-      hint.addEventListener('click', toggle);
-      hint.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' ') { e.preventDefault(); toggle(); }});
+      hint.addEventListener('click',toggle);
+      hint.addEventListener('keydown',(e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(); }});
 
-      const autoCompact = () => {
-        const small = window.innerHeight < 680;
-        hint.classList.toggle('compact', small);
-        const expanded = !hint.classList.contains('compact');
-        hint.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-        document.getElementById('hintChev').textContent = expanded ? '▾' : '▸';
+      const autoCompact=()=>{
+        const small=window.innerHeight<680;
+        hint.classList.toggle('compact',small);
+        const expanded=!hint.classList.contains('compact');
+        hint.setAttribute('aria-expanded', expanded?'true':'false');
+        document.getElementById('hintChev').textContent=expanded?'▾':'▸';
       };
-      window.addEventListener('resize', autoCompact);
+      window.addEventListener('resize',autoCompact);
       autoCompact();
     }
 
@@ -982,13 +946,13 @@
       this.pegs=[];
       const W=CONFIG.world.w, H=CONFIG.world.h;
 
-      const A = [
+      const A=[
         [90, H*0.50],
         [220, H*0.20],[240, H*0.38],[240, H*0.62],[220, H*0.80],
         [360, H*0.22],[380, H*0.40],[380, H*0.60],[360, H*0.78],
         [520, H*0.32],[520, H*0.68],
       ];
-      const B = [
+      const B=[
         [W-90, H*0.50],
         [W-220, H*0.20],[W-240, H*0.38],[W-240, H*0.62],[W-220, H*0.80],
         [W-360, H*0.22],[W-380, H*0.40],[W-380, H*0.60],[W-360, H*0.78],
@@ -1006,7 +970,7 @@
       document.getElementById('scoreB').textContent=String(this.scoreB);
       document.getElementById('turnText').textContent=(this.turn==='A')?'Equipo A':'Equipo B';
       document.getElementById('turnPill').style.background=(this.turn==='A')?'#4da3ff':'#ff6b6b';
-      document.getElementById('undo').disabled = !this.undoSnap || this.phase!=='ready';
+      document.getElementById('undo').disabled=!this.undoSnap || this.phase!=='ready';
     }
 
     canShootNow(){ return this.phase==='ready' && this.ball.speed()<0.5; }
@@ -1044,7 +1008,7 @@
         const p=map.get(sp.id);
         if(!p) continue;
         p.active=sp.active;
-        p.removedPose = sp.removedPose ? {x:sp.removedPose.x,y:sp.removedPose.y,angle:sp.removedPose.angle} : null;
+        p.removedPose=sp.removedPose?{x:sp.removedPose.x,y:sp.removedPose.y,angle:sp.removedPose.angle}:null;
       }
 
       this.hoverPegId=null;
@@ -1080,6 +1044,8 @@
       this.pendingGoal=null;
       this.hoverPegId=null;
 
+      this.goalFX.active=false;
+
       this.input.resetSelection();
       this.setOverlay('cornerOverlay', false);
       this.setOverlay('removeOverlay', false);
@@ -1091,8 +1057,8 @@
     placeBallAtCornerForTeam(team, which){
       const W=CONFIG.world.w, H=CONFIG.world.h;
       const m=CONFIG.cornerMargin;
-      this.ball.p.y = (which==='top') ? m : (H-m);
-      this.ball.p.x = (team==='A') ? m : (W-m);
+      this.ball.p.y=(which==='top')?m:(H-m);
+      this.ball.p.x=(team==='A')?m:(W-m);
       this.ball.v.x=0; this.ball.v.y=0;
     }
 
@@ -1110,25 +1076,21 @@
       const open=CONFIG.goal.opening;
       const yTop=(H-open)/2, yBot=yTop+open;
       const b=this.ball;
-
-      const inMouth = (b.p.y>=yTop && b.p.y<=yBot);
-      if(inMouth && (b.p.x + b.r < 0)) return { scorer:'B', conceded:'A' };
-      if(inMouth && (b.p.x - b.r > W)) return { scorer:'A', conceded:'B' };
+      const inMouth=(b.p.y>=yTop && b.p.y<=yBot);
+      if(inMouth && (b.p.x + b.r < 0)) return { scorer:'B', conceded:'A', side:'left' };
+      if(inMouth && (b.p.x - b.r > W)) return { scorer:'A', conceded:'B', side:'right' };
       return null;
     }
 
     nextRemovedPose(team){
       const W=CONFIG.world.w, H=CONFIG.world.h;
-      const rem = CONFIG.render.removed;
-      const count = this.pegs.filter(p=>!p.active && p.team===team).length;
-
-      const baseY = 60;
-      const stepY = 2*CONFIG.peg.r*rem.scale + 10;
-      const y = clamp(baseY + count*stepY, 60, H-60);
-
-      const x = (team==='A') ? (-CONFIG.goal.boxDepth - 40) : (W + CONFIG.goal.boxDepth + 40);
-      const angle = rem.lieAngleBase + rand(-rem.lieAngleJitter, rem.lieAngleJitter);
-      return {x, y, angle};
+      const rem=CONFIG.render.removed;
+      const count=this.pegs.filter(p=>!p.active && p.team===team).length;
+      const baseY=60, stepY=2*CONFIG.peg.r*rem.scale + 10;
+      const y=clamp(baseY + count*stepY, 60, H-60);
+      const x=(team==='A') ? (-CONFIG.goal.boxDepth - 40) : (W + CONFIG.goal.boxDepth + 40);
+      const angle=rem.lieAngleBase + rand(-rem.lieAngleJitter, rem.lieAngleJitter);
+      return {x,y,angle};
     }
 
     choosePegToRemove(pegId){
@@ -1140,53 +1102,57 @@
       peg.active=false;
       peg.removedPose=this.nextRemovedPose(team);
 
-      this.pendingCornerTeam = team;
-      this.pendingRemovalTeam = null;
+      this.pendingCornerTeam=team;
+      this.pendingRemovalTeam=null;
       this.phase='waitingCorner';
       this.setOverlay('removeOverlay', false);
 
-      const teamName = (this.pendingCornerTeam==='A') ? 'Equipo A' : 'Equipo B';
-      document.getElementById('cornerTitle').textContent = `Saque tras gol · ${teamName}`;
-      document.getElementById('cornerDesc').textContent = `El ${teamName} recibió el gol. Elige una de tus dos esquinas para sacar.`;
+      const teamName=(this.pendingCornerTeam==='A')?'Equipo A':'Equipo B';
+      document.getElementById('cornerTitle').textContent=`Saque tras gol · ${teamName}`;
+      document.getElementById('cornerDesc').textContent=`El ${teamName} recibió el gol. Elige una de tus dos esquinas para sacar.`;
       this.setOverlay('cornerOverlay', true);
 
       this.updateHUD();
     }
 
+    // ✅ dispara FX en el centro de la portería donde entró el balón
+    startGoalFX(side){
+      const H=CONFIG.world.h;
+      const open=CONFIG.goal.opening;
+      const y=(H-open)/2 + open/2;
+      const x = (side==='left') ? 0 : CONFIG.world.w;
+      this.goalFX.active=true;
+      this.goalFX.side=side;
+      this.goalFX.startMs=nowMs();
+      this.goalFX.durationMs=CONFIG.effects.goalFxMs;
+      this.goalFX.maxRWorld=CONFIG.effects.goalFxMaxR;
+      this.goalFX.centerWorld={x,y};
+    }
+
     applyGoal(g){
       if(g.scorer==='A') this.scoreA++; else this.scoreB++;
+
+      this.startGoalFX(g.side);
 
       this.goalBannerUntil=nowMs()+CONFIG.effects.goalBannerMs;
       document.getElementById('goalBanner').classList.add('show');
 
       this.ball.v.x=0; this.ball.v.y=0;
-      this.ball.p.x = CONFIG.world.w/2;
-      this.ball.p.y = CONFIG.world.h/2;
+      this.ball.p.x=CONFIG.world.w/2; this.ball.p.y=CONFIG.world.h/2;
 
-      if(this.scoreA>=11 || this.scoreB>=11){
-        this.phase='gameover';
-        this.winner=(this.scoreA>=11)?'A':'B';
-        this.pendingCornerTeam=null;
-        this.pendingRemovalTeam=null;
-        this.setOverlay('cornerOverlay', false);
-        this.setOverlay('removeOverlay', false);
-        this.updateHUD();
-        return;
-      }
-
-      this.turn = g.conceded;
-      this.pendingRemovalTeam = g.conceded;
-      this.pendingCornerTeam = null;
-      this.pendingGoal = g;
+      this.turn=g.conceded;
+      this.pendingRemovalTeam=g.conceded;
+      this.pendingCornerTeam=null;
+      this.pendingGoal=g;
 
       this.phase='chooseRemoval';
       this.hoverPegId=null;
       this.input.resetSelection();
 
-      const teamName = (this.pendingRemovalTeam==='A') ? 'Equipo A' : 'Equipo B';
-      document.getElementById('removeTitle').textContent = `Retirar palito · ${teamName}`;
-      document.getElementById('removeDesc').textContent = `Te han metido gol. Toca uno de tus palitos (${teamName}) para retirarlo (quedará tumbado fuera del campo).`;
-      this.setOverlay('removeOverlay', true);   // se muestra por defecto
+      const teamName=(this.pendingRemovalTeam==='A')?'Equipo A':'Equipo B';
+      document.getElementById('removeTitle').textContent=`Retirar palito · ${teamName}`;
+      document.getElementById('removeDesc').textContent=`Te han metido gol. Toca uno de tus palitos (${teamName}) para retirarlo (quedará tumbado fuera del campo).`;
+      this.setOverlay('removeOverlay', true);
       this.setOverlay('cornerOverlay', false);
 
       this.updateHUD();
@@ -1256,20 +1222,19 @@
 
   document.getElementById('help').addEventListener('click', ()=>document.getElementById('helpBack').classList.add('show'));
   document.getElementById('closeHelp').addEventListener('click', ()=>document.getElementById('helpBack').classList.remove('show'));
-  document.getElementById('helpBack').addEventListener('click', (e)=>{
-    if(e.target.id==='helpBack') document.getElementById('helpBack').classList.remove('show');
-  });
+  document.getElementById('helpBack').addEventListener('click', (e)=>{ if(e.target.id==='helpBack') document.getElementById('helpBack').classList.remove('show'); });
   window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') document.getElementById('helpBack').classList.remove('show'); });
 })();
 </script>
 
 <!--
 Cómo jugar
-- Si sale el aviso de “Retirar palito”, puedes pulsar Cerrar.
-- Aunque lo cierres, sigues en modo retirar palito: toca un palito de tu equipo para retirarlo.
+- Chuta: toca bola → arrastra hacia atrás → suelta.
+- Gol: verás GOOOL + flash/onda en la portería.
+- Después eliges qué palito retirar (puedes cerrar el aviso), y luego esquina para sacar.
 
 Parámetros recomendados
-- CONFIG.render.pegPickExtraCssPx: aumenta si seleccionar palitos en móvil es difícil.
+- CONFIG.effects.goalFxMs / goalFxMaxR: ajusta duración y tamaño de la onda.
 -->
 </body>
 </html>
