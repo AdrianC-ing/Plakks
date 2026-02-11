@@ -93,18 +93,17 @@
     .modal ul{margin:8px 0 0 18px}
     .modal .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;padding:0;border:0;background:none;box-shadow:none}
 
-    /* ✅ Overlay NO bloqueante: deja pasar toques al canvas.
-       Solo el panel recibe interacción (pointer-events:auto). */
+    /* Overlay no bloquea el campo */
     .overlay{
       position:absolute;inset:0;display:none;align-items:flex-start;justify-content:center;
       z-index:20;
-      pointer-events:none;              /* <- clave */
+      pointer-events:none;
       padding:12px;
     }
     .overlay.show{display:flex}
 
     .panel{
-      pointer-events:auto;              /* <- solo el panel captura clics */
+      pointer-events:auto;
       width:min(560px,calc(100% - 24px));
       border-radius:16px;border:1px solid rgba(255,255,255,.14);
       background:rgba(15,26,47,.94);
@@ -112,7 +111,8 @@
       padding:14px;
       backdrop-filter: blur(4px);
     }
-    .panel h3{margin:0 0 6px;font-size:15px}
+    .panelHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+    .panel h3{margin:0;font-size:15px}
     .panel p{margin:0 0 12px;font-size:13px;line-height:1.4;color:rgba(234,240,255,.82)}
     .choiceRow{display:flex;gap:10px;flex-wrap:wrap}
     .choiceRow button{flex:1;min-width:150px}
@@ -154,8 +154,8 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <div class="title">PLAKKS-like Flick Soccer <span class="badge">overlay no bloquea</span></div>
-      <div class="sub">Ahora el mensaje de “Retirar palito” no impide tocar el campo</div>
+      <div class="title">PLAKKS-like Flick Soccer <span class="badge">cerrar aviso gol</span></div>
+      <div class="sub">El panel se puede cerrar sin salir del modo “quitar palito”</div>
     </div>
     <div class="hud">
       <div class="score" aria-label="Marcador">
@@ -181,15 +181,21 @@
 
       <div class="overlay" id="removeOverlay">
         <div class="panel">
-          <h3 id="removeTitle">Elige el palito a retirar</h3>
+          <div class="panelHead">
+            <h3 id="removeTitle">Retirar palito</h3>
+            <!-- ✅ Nuevo: cerrar solo el panel, sin cambiar fase -->
+            <button id="closeRemove" class="secondary" type="button">Cerrar</button>
+          </div>
           <p id="removeDesc">Te han metido gol. Toca uno de tus palitos para retirarlo (quedará tumbado fuera del campo).</p>
-          <div class="hint">Ahora puedes tocar palitos aunque este panel esté visible (no bloquea el campo).</div>
+          <div class="hint">Aunque cierres este aviso, sigues en modo “retirar palito”.</div>
         </div>
       </div>
 
       <div class="overlay" id="cornerOverlay">
         <div class="panel">
-          <h3 id="cornerTitle">Elige esquina para sacar</h3>
+          <div class="panelHead">
+            <h3 id="cornerTitle">Elige esquina para sacar</h3>
+          </div>
           <p id="cornerDesc">El equipo que recibió el gol saca ahora. Elige una de tus dos esquinas.</p>
           <div class="choiceRow">
             <button id="cornerTop" class="secondary">Esquina superior</button>
@@ -238,71 +244,27 @@
 (() => {
   const CONFIG = {
     world: { w: 1200, h: 720 },
-
-    goal: {
-      opening: 220,
-      boxDepth: 92,
-      boxDepthPhysics: 110,
-      netCell: 18,
-      innerPad: 10
-    },
-
+    goal: { opening: 220, boxDepth: 92, boxDepthPhysics: 110, netCell: 18, innerPad: 10 },
     ball: { r: 16, restitution: 0.90, damp: 0.994, maxSpeed: 1800 },
     peg:  { r: 24, restitution: 0.55 },
     teams: { count: 11 },
-
     shot: {
-      minSpeed: 140,
-      maxSpeed: 980,
-      responseCurve: 1.8,
-      aimLineW: 3,
-      maxDragFrac: 0.18,
-      minDragCssPx: 90,
-      maxDragCssPx: 160
+      minSpeed: 140, maxSpeed: 980, responseCurve: 1.8, aimLineW: 3,
+      maxDragFrac: 0.18, minDragCssPx: 90, maxDragCssPx: 160
     },
-
     physics: {
-      dt: 1/120,
-      maxSubStepsPerFrame: 10,
-      solverIterations: 2,
-      wallRestitution: 0.86,
-      netRestitution: 0.55,
-      stopSpeed: 14,
-      maxSimSeconds: 4.0,
-      penetrationSlop: 0.02,
-      penetrationPercent: 0.92,
+      dt: 1/120, maxSubStepsPerFrame: 10, solverIterations: 2,
+      wallRestitution: 0.86, netRestitution: 0.55,
+      stopSpeed: 14, maxSimSeconds: 4.0,
+      penetrationSlop: 0.02, penetrationPercent: 0.92,
     },
-
     render: {
-      pitchMargin: 34,
-      pitchCornerR: 38,
-      grassNoise: 0.06,
-      shadowOffset: { x: 10, y: 14 },
-      shadowBlur: 16,
-      vignette: true,
-
-      removed: {
-        scale: 0.78,
-        alpha: 0.82,
-        pad: 10,
-        gap: 10,
-        lieAngleBase: Math.PI/2,
-        lieAngleJitter: 0.28
-      },
-
-      pegVisual: {
-        widthMul: 1.05,
-        lengthMul: 2.65,
-        tiltA: -0.18,
-        tiltB:  0.18,
-        shadowRxMul: 0.85,
-        shadowRyMul: 0.30
-      },
-
-      ballPickExtraCssPx: 18,
-      pegPickExtraCssPx: 10
+      pitchMargin: 34, pitchCornerR: 38, grassNoise: 0.06,
+      shadowOffset: { x: 10, y: 14 }, shadowBlur: 16, vignette: true,
+      removed: { scale: 0.78, alpha: 0.82, pad: 10, gap: 10, lieAngleBase: Math.PI/2, lieAngleJitter: 0.28 },
+      pegVisual: { widthMul: 1.05, lengthMul: 2.65, tiltA: -0.18, tiltB:  0.18, shadowRxMul: 0.85, shadowRyMul: 0.30 },
+      ballPickExtraCssPx: 18, pegPickExtraCssPx: 10
     },
-
     effects: { goalBannerMs: 850, goalPauseMs: 520 },
     cornerMargin: 52,
   };
@@ -312,92 +274,46 @@
   const nowMs = ()=>performance.now();
   const rand = (a,b)=>a+Math.random()*(b-a);
 
-  class Vec2{
-    constructor(x=0,y=0){this.x=x;this.y=y;}
-    mag(){return Math.hypot(this.x,this.y);}
-    mul(s){this.x*=s;this.y*=s;return this;}
-  }
-
+  class Vec2{ constructor(x=0,y=0){this.x=x;this.y=y;} mag(){return Math.hypot(this.x,this.y);} mul(s){this.x*=s;this.y*=s;return this;} }
   class Ball{
-    constructor(x,y){
-      this.p=new Vec2(x,y);
-      this.v=new Vec2(0,0);
-      this.r=CONFIG.ball.r;
-      this.restitution=CONFIG.ball.restitution;
-      this.damp=CONFIG.ball.damp;
-      this.maxSpeed=CONFIG.ball.maxSpeed;
-    }
+    constructor(x,y){ this.p=new Vec2(x,y); this.v=new Vec2(0,0);
+      this.r=CONFIG.ball.r; this.restitution=CONFIG.ball.restitution; this.damp=CONFIG.ball.damp; this.maxSpeed=CONFIG.ball.maxSpeed; }
     speed(){return this.v.mag();}
   }
-
   class Peg{
-    constructor(x,y,team,id){
-      this.p=new Vec2(x,y);
-      this.r=CONFIG.peg.r;
-      this.team=team;
-      this.id=id;
-      this.active=true;
-      this.removedPose=null;
-    }
+    constructor(x,y,team,id){ this.p=new Vec2(x,y); this.r=CONFIG.peg.r; this.team=team; this.id=id; this.active=true; this.removedPose=null; }
   }
 
   class Physics{
     constructor(game){this.game=game;}
-
-    mouthYBounds(){
-      const H=CONFIG.world.h;
-      const open=CONFIG.goal.opening;
-      const yTop=(H-open)/2, yBot=yTop+open;
-      return {yTop,yBot};
-    }
-
-    inMouth(y){
-      const {yTop,yBot}=this.mouthYBounds();
-      return (y>=yTop && y<=yBot);
-    }
+    mouthYBounds(){ const H=CONFIG.world.h, open=CONFIG.goal.opening; const yTop=(H-open)/2, yBot=yTop+open; return {yTop,yBot}; }
+    inMouth(y){ const {yTop,yBot}=this.mouthYBounds(); return (y>=yTop && y<=yBot); }
 
     step(dt){
-      const W=CONFIG.world.w, H=CONFIG.world.h;
-      const b=this.game.ball;
+      const W=CONFIG.world.w, H=CONFIG.world.h, b=this.game.ball;
 
-      b.p.x += b.v.x*dt;
-      b.p.y += b.v.y*dt;
-
+      b.p.x += b.v.x*dt; b.p.y += b.v.y*dt;
       b.v.mul(b.damp);
 
       const s=b.speed();
-      if(s>b.maxSpeed){
-        const k=b.maxSpeed/(s+1e-9);
-        b.v.mul(k);
-      }
+      if(s>b.maxSpeed){ const k=b.maxSpeed/(s+1e-9); b.v.mul(k); }
 
-      const e=CONFIG.physics.wallRestitution;
-      const en=CONFIG.physics.netRestitution;
-      const inMouth = this.inMouth(b.p.y);
-      const dPhys = CONFIG.goal.boxDepthPhysics;
+      const e=CONFIG.physics.wallRestitution, en=CONFIG.physics.netRestitution;
+      const inMouth=this.inMouth(b.p.y), dPhys=CONFIG.goal.boxDepthPhysics;
 
       if(!inMouth){
         if(b.p.x-b.r<0){ b.p.x=b.r; b.v.x=Math.abs(b.v.x)*e; }
         if(b.p.x+b.r>W){ b.p.x=W-b.r; b.v.x=-Math.abs(b.v.x)*e; }
       }else{
-        if(b.p.x - b.r < -dPhys){
-          b.p.x = -dPhys + b.r;
-          b.v.x = Math.abs(b.v.x) * en;
-        }
-        if(b.p.x + b.r > W + dPhys){
-          b.p.x = W + dPhys - b.r;
-          b.v.x = -Math.abs(b.v.x) * en;
-        }
+        if(b.p.x - b.r < -dPhys){ b.p.x = -dPhys + b.r; b.v.x = Math.abs(b.v.x) * en; }
+        if(b.p.x + b.r > W + dPhys){ b.p.x = W + dPhys - b.r; b.v.x = -Math.abs(b.v.x) * en; }
       }
 
       if(b.p.y-b.r<0){ b.p.y=b.r; b.v.y=Math.abs(b.v.y)*e; }
       if(b.p.y+b.r>H){ b.p.y=H-b.r; b.v.y=-Math.abs(b.v.y)*e; }
 
       for(let it=0; it<CONFIG.physics.solverIterations; it++){
-        for(const p of this.game.pegs){
-          if(!p.active) continue;
-          this.resolveBallPeg(b,p);
-        }
+        for(const p of this.game.pegs){ if(!p.active) continue; this.resolveBallPeg(b,p); }
       }
     }
 
@@ -415,8 +331,7 @@
         const percent=CONFIG.physics.penetrationPercent;
         const corr=Math.max(penetration-slop,0)*percent;
 
-        ball.p.x += nx*corr;
-        ball.p.y += ny*corr;
+        ball.p.x += nx*corr; ball.p.y += ny*corr;
 
         const velAlong = ball.v.x*nx + ball.v.y*ny;
         if(velAlong<0){
@@ -427,10 +342,7 @@
           const tx = ball.v.x - (ball.v.x*nx+ball.v.y*ny)*nx;
           const ty = ball.v.y - (ball.v.x*nx+ball.v.y*ny)*ny;
           const tmag = Math.hypot(tx,ty);
-          if(tmag>1e-6){
-            ball.v.x -= (tx/tmag)*3.0;
-            ball.v.y -= (ty/tmag)*3.0;
-          }
+          if(tmag>1e-6){ ball.v.x -= (tx/tmag)*3.0; ball.v.y -= (ty/tmag)*3.0; }
         }
       }
     }
@@ -453,10 +365,7 @@
       const img=this.noiseCtx.createImageData(256,256);
       for(let i=0;i<img.data.length;i+=4){
         const n=(Math.random()*2-1)*255;
-        img.data[i]=0;
-        img.data[i+1]=120+n*0.08;
-        img.data[i+2]=0;
-        img.data[i+3]=255;
+        img.data[i]=0; img.data[i+1]=120+n*0.08; img.data[i+2]=0; img.data[i+3]=255;
       }
       this.noiseCtx.putImageData(img,0,0);
     }
@@ -466,8 +375,7 @@
       const r=this.playArea.getBoundingClientRect();
       const cssW=Math.max(300, r.width||900);
       const cssH=Math.max(300, r.height||540);
-      const w=Math.floor(cssW*dpr);
-      const h=Math.floor(cssH*dpr);
+      const w=Math.floor(cssW*dpr), h=Math.floor(cssH*dpr);
       if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;}
 
       const pad=CONFIG.render.pitchMargin*dpr;
@@ -505,9 +413,7 @@
     grassFillAt(x0,y0,w,h){
       const ctx=this.ctx;
       const g=ctx.createLinearGradient(x0,y0,x0+w,y0+h);
-      g.addColorStop(0,'#0f6b3c');
-      g.addColorStop(0.5,'#0e5f37');
-      g.addColorStop(1,'#0b4a2c');
+      g.addColorStop(0,'#0f6b3c'); g.addColorStop(0.5,'#0e5f37'); g.addColorStop(1,'#0b4a2c');
       return g;
     }
 
@@ -525,8 +431,7 @@
 
       ctx.save();
       ctx.fillStyle=this.grassFillAt(x0,y0,W*s,H*s);
-      this.roundRect(x0,y0,W*s,H*s,r);
-      ctx.fill();
+      this.roundRect(x0,y0,W*s,H*s,r); ctx.fill();
 
       ctx.globalAlpha=0.13;
       for(let i=0;i<10;i++){
@@ -563,19 +468,12 @@
 
       ctx.lineWidth=3*this.dpr;
       ctx.strokeStyle='rgba(245,255,245,.85)';
-      ctx.beginPath();
-      ctx.moveTo(x0+(W*s)/2, y0+2*this.dpr);
-      ctx.lineTo(x0+(W*s)/2, y0+H*s-2*this.dpr);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x0+(W*s)/2, y0+2*this.dpr); ctx.lineTo(x0+(W*s)/2, y0+H*s-2*this.dpr); ctx.stroke();
 
-      ctx.beginPath();
-      ctx.arc(x0+(W*s)/2,y0+(H*s)/2,110*s,0,Math.PI*2);
-      ctx.stroke();
+      ctx.beginPath(); ctx.arc(x0+(W*s)/2,y0+(H*s)/2,110*s,0,Math.PI*2); ctx.stroke();
 
       ctx.fillStyle='rgba(245,255,245,.95)';
-      ctx.beginPath();
-      ctx.arc(x0+(W*s)/2,y0+(H*s)/2,5*this.dpr,0,Math.PI*2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(x0+(W*s)/2,y0+(H*s)/2,5*this.dpr,0,Math.PI*2); ctx.fill();
 
       ctx.restore();
     }
@@ -631,10 +529,7 @@
 
         ctx.lineWidth=5*this.dpr;
         ctx.strokeStyle='rgba(255,255,255,.85)';
-        ctx.beginPath();
-        ctx.moveTo(xLine, boxY);
-        ctx.lineTo(xLine, boxY+h);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(xLine, boxY); ctx.lineTo(xLine, boxY+h); ctx.stroke();
 
         ctx.lineWidth=2.3*this.dpr;
         ctx.strokeStyle='rgba(255,255,255,.72)';
@@ -678,8 +573,7 @@
       ctx.fillStyle=g;
       ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
       ctx.strokeStyle='rgba(0,0,0,.18)';
-      ctx.lineWidth=1.3*this.dpr;
-      ctx.stroke();
+      ctx.lineWidth=1.3*this.dpr; ctx.stroke();
 
       ctx.globalAlpha=0.55;
       ctx.fillStyle='rgba(255,255,255,.85)';
@@ -691,9 +585,7 @@
         ctx.globalAlpha=1;
         ctx.strokeStyle='rgba(125,211,252,.95)';
         ctx.lineWidth=3*this.dpr;
-        ctx.beginPath();
-        ctx.arc(p.x,p.y,r+4*this.dpr,0,Math.PI*2);
-        ctx.stroke();
+        ctx.beginPath(); ctx.arc(p.x,p.y,r+4*this.dpr,0,Math.PI*2); ctx.stroke();
       }
       ctx.restore();
     }
@@ -709,8 +601,7 @@
       const rot = (forcedRot!==null) ? forcedRot : ((team==='A') ? pv.tiltA : pv.tiltB);
 
       ctx.save();
-      ctx.translate(x,y);
-      ctx.rotate(rot);
+      ctx.translate(x,y); ctx.rotate(rot);
 
       ctx.globalAlpha = alpha;
       const lg = ctx.createLinearGradient(-w*0.65, 0, w*0.65, 0);
@@ -725,8 +616,7 @@
       ctx.fill();
 
       ctx.strokeStyle='rgba(0,0,0,.20)';
-      ctx.lineWidth=1.2*this.dpr;
-      ctx.stroke();
+      ctx.lineWidth=1.2*this.dpr; ctx.stroke();
 
       ctx.globalAlpha = alpha * (dimmed ? 0.25 : 0.40);
       const hg = ctx.createLinearGradient(-w/2,0,w/2,0);
@@ -862,8 +752,7 @@
       g.addColorStop(0,'rgba(0,0,0,0)');
       g.addColorStop(1,'rgba(0,0,0,.35)');
       ctx.save();
-      ctx.fillStyle=g;
-      ctx.fillRect(0,0,w,h);
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
       ctx.restore();
     }
 
@@ -1003,7 +892,6 @@
         ball.v.y = dir.y * targetSpeed;
         this.game.onShot();
       }
-
       this.aiming=false;
     }
 
@@ -1060,6 +948,13 @@
       document.getElementById('cornerTop').addEventListener('click', ()=>this.chooseCorner('top'));
       document.getElementById('cornerBottom').addEventListener('click', ()=>this.chooseCorner('bottom'));
 
+      // ✅ nuevo: cerrar aviso de “retirar palito” sin salir de chooseRemoval
+      document.getElementById('closeRemove').addEventListener('click', ()=>{
+        if(this.phase==='chooseRemoval'){
+          this.setOverlay('removeOverlay', false); // solo ocultar visualmente
+        }
+      });
+
       const hint = document.getElementById('hintCard');
       const toggle = () => {
         hint.classList.toggle('compact');
@@ -1081,9 +976,7 @@
       autoCompact();
     }
 
-    setOverlay(id, show){
-      document.getElementById(id).classList.toggle('show', !!show);
-    }
+    setOverlay(id, show){ document.getElementById(id).classList.toggle('show', !!show); }
 
     buildFixedLayout(){
       this.pegs=[];
@@ -1105,10 +998,7 @@
       for(let i=0;i<CONFIG.teams.count;i++) this.pegs.push(new Peg(A[i][0],A[i][1],'A',`A${i}`));
       for(let i=0;i<CONFIG.teams.count;i++) this.pegs.push(new Peg(B[i][0],B[i][1],'B',`B${i}`));
 
-      for(const p of this.pegs){
-        p.p.x += rand(-6,6);
-        p.p.y += rand(-8,8);
-      }
+      for(const p of this.pegs){ p.p.x += rand(-6,6); p.p.y += rand(-8,8); }
     }
 
     updateHUD(){
@@ -1296,7 +1186,7 @@
       const teamName = (this.pendingRemovalTeam==='A') ? 'Equipo A' : 'Equipo B';
       document.getElementById('removeTitle').textContent = `Retirar palito · ${teamName}`;
       document.getElementById('removeDesc').textContent = `Te han metido gol. Toca uno de tus palitos (${teamName}) para retirarlo (quedará tumbado fuera del campo).`;
-      this.setOverlay('removeOverlay', true);
+      this.setOverlay('removeOverlay', true);   // se muestra por defecto
       this.setOverlay('cornerOverlay', false);
 
       this.updateHUD();
@@ -1314,30 +1204,6 @@
       this.pauseUntil=nowMs()+CONFIG.effects.goalPauseMs;
       this.phase='paused';
       this.updateHUD();
-    }
-
-    drawGameOverOverlay(){
-      const ctx=this.renderer.ctx;
-      const w=this.renderer.w, h=this.renderer.h;
-      const dpr=this.renderer.dpr;
-
-      ctx.save();
-      ctx.fillStyle='rgba(0,0,0,.35)';
-      ctx.fillRect(0,0,w,h);
-
-      const text=(this.winner==='A')?'¡GANA EQUIPO A!':'¡GANA EQUIPO B!';
-      ctx.font=`1000 ${Math.floor(54*dpr)}px system-ui`;
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillStyle='rgba(255,255,255,.92)';
-      ctx.shadowColor='rgba(0,0,0,.45)';
-      ctx.shadowBlur=18*dpr;
-      ctx.fillText(text,w/2,h/2-22*dpr);
-      ctx.shadowBlur=0;
-
-      ctx.font=`800 ${Math.floor(16*dpr)}px system-ui`;
-      ctx.fillStyle='rgba(234,240,255,.85)';
-      ctx.fillText('Pulsa “Reiniciar partido” para jugar otra vez.',w/2,h/2+28*dpr);
-      ctx.restore();
     }
 
     loop(){
@@ -1380,8 +1246,6 @@
       }
 
       this.renderer.draw();
-      if(this.phase==='gameover') this.drawGameOverOverlay();
-
       requestAnimationFrame(()=>this.loop());
     }
   }
@@ -1395,19 +1259,17 @@
   document.getElementById('helpBack').addEventListener('click', (e)=>{
     if(e.target.id==='helpBack') document.getElementById('helpBack').classList.remove('show');
   });
-  window.addEventListener('keydown', (e)=>{
-    if(e.key==='Escape') document.getElementById('helpBack').classList.remove('show');
-  });
+  window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') document.getElementById('helpBack').classList.remove('show'); });
 })();
 </script>
 
 <!--
-Cómo jugar:
-- Tras gol aparece un panel informativo, pero el campo sigue siendo clicable.
-- Toca un palito del equipo que encajó para retirarlo.
+Cómo jugar
+- Si sale el aviso de “Retirar palito”, puedes pulsar Cerrar.
+- Aunque lo cierres, sigues en modo retirar palito: toca un palito de tu equipo para retirarlo.
 
-Parámetros:
-- Si quieres que el panel moleste aún menos: en .overlay usa padding más pequeño o reduce width de .panel.
+Parámetros recomendados
+- CONFIG.render.pegPickExtraCssPx: aumenta si seleccionar palitos en móvil es difícil.
 -->
 </body>
 </html>
